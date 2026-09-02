@@ -1,0 +1,15 @@
+{
+    "name": "Raylib Win/Switch Dev",
+    "build": {
+        "dockerfile": "../Dockerfile"
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-vscode.makefile-tools"
+            ]
+        }
+    },
+    "remoteUser": "root"
+}
