@@ -20,6 +20,8 @@ namespace vovochka
         void unload();
 
         void draw(const LevelMap &map, bool debugObjects = true) const;
+        void drawMap(const LevelMap &map) const;
+        void drawFrontLayer(const LevelMap &map) const;
 
         const SpriteSheetGPU *sheet(const std::string &name) const;
 
@@ -34,6 +36,7 @@ namespace vovochka
         int m_tileH = 80;
 
         void drawTile(const MapTile &t, float px, float py) const;
+        void drawTile(int set, int index, float px, float py) const;
     };
 
 } // namespace vovochka

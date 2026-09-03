@@ -49,19 +49,52 @@ namespace vovochka
         m_bg = {};
     }
 
-    void LevelRenderer::drawTile(const MapTile &t, float px, float py) const
+    void LevelRenderer::drawTile(int set, int index, float px, float py) const
     {
-        if (t.index == 9 || t.index == 0xFF)
+        if (index == 9 || index == 0xFF)
             return;
 
-        std::string sheetName = "Set" + std::to_string(t.set);
+        std::string sheetName = "Set" + std::to_string(set);
         const SpriteSheetGPU *sheet = m_sheets->get(sheetName);
         if (!sheet)
             return;
 
-        Rectangle src = sheet->frame(t.index);
+        Rectangle src = sheet->frame(index);
         Rectangle dst{px, py, static_cast<float>(sheet->patternW), static_cast<float>(sheet->patternH)};
         DrawTexturePro(sheet->texture, src, dst, {0, 0}, 0.0f, WHITE);
+    }
+
+    void LevelRenderer::drawTile(const MapTile &t, float px, float py) const
+    {
+        drawTile(t.set, t.index, px, py);
+    }
+
+    void LevelRenderer::drawFrontLayer(const LevelMap &map) const
+    {
+        const float tw = static_cast<float>(m_tileW);
+        const float th = static_cast<float>(m_tileH);
+
+        // Поверх каждого стыка «лестница×земля» (LadderBase) рисуем
+        // тайл земли того же набора — игрок и враги проходят «сквозь землю».
+        for (int x = 0; x < map.width; ++x)
+            for (int y = 0; y < map.height; ++y)
+            {
+                if (map.kindAt(x, y) != TileKind::LadderBase)
+                    continue;
+
+                const MapTile &t = map.tileAt(x, y);
+                drawTile(t.set, 0 /* Platform */, x * tw, y * th);
+            }
+    }
+
+    void LevelRenderer::drawMap(const LevelMap &map) const
+    {
+        const float tw = static_cast<float>(m_tileW);
+        const float th = static_cast<float>(m_tileH);
+
+        for (int x = 0; x < map.width; ++x)
+            for (int y = 0; y < map.height; ++y)
+                drawTile(map.tileAt(x, y), x * tw, y * th);
     }
 
     void LevelRenderer::draw(const LevelMap &map, bool debugObjects) const
@@ -76,9 +109,7 @@ namespace vovochka
                            {0, 0, map.width * tw, map.height * th}, {0, 0}, 0, WHITE);
         }
 
-        for (int x = 0; x < map.width; ++x)
-            for (int y = 0; y < map.height; ++y)
-                drawTile(map.tileAt(x, y), x * tw, y * th);
+        drawMap(map);
 
         if (!debugObjects)
             return;
@@ -90,9 +121,8 @@ namespace vovochka
                 c = GREEN;
             else if (o.type == MapObjectType::Girl)
                 c = RED;
-            /*else if (o.type == MapObjectType::Boss)
-                c = MAGENTA;*/
-            DrawRectangleLines(o.x * m_tileW + 2, o.y * m_tileH + 2, m_tileW - 4, m_tileH - 4, c);
+            DrawRectangleLines(o.x * m_tileW + 2, o.y * m_tileH + 2,
+                               m_tileW - 4, m_tileH - 4, c);
         }
     }
 

@@ -2,7 +2,7 @@
 
 namespace vovochka
 {
-    // Блок кадров внутри спрайт-листа.
+
     struct FrameBlock
     {
         int first = 0;
@@ -10,33 +10,59 @@ namespace vovochka
         bool loop = true;
     };
 
-    // Восстановленные раскладки оригинальных листов:
+    // Раскладки спрайтов. Количество кадров на анимацию вычисляется
+    // автоматически: totalFrames / animCount.
     //
-    // PlayerStand0 (16 кадров):  [0..7]  — стоит вправо, [8..15] — стоит влево.
-    // Girl1Wait    (2 кадра):    статично; 0 — девушка ждёт, 1 — девушки нет.
-    // Enemy1Go / Enemy2Go (32):  [0..7]   — бег вправо,
-    //                            [8..15]  — подъём по лестнице,
-    //                            [16..23] — бег влево,
-    //                            [24..31] — спуск по лестнице.
+    // PlayerStand0: 16 кадров, 2 анимации (вправо, влево) → 8 кадров каждая
+    // PlayerGo:     32 кадра, 4 анимации (→, ↑, ←, ↓)   → 8 кадров каждая
+    // Enemy1Go/2Go: 32 кадра, 4 анимации (→, ↑, ←, ↓)   → 8 кадров каждая
+    // Girl1Wait:     2 кадра, 2 состояния (ждёт, нет)     → 1 кадр каждое
     struct SpriteLayout
     {
-        // Игрок
-        static FrameBlock playerStand(bool faceRight)
+
+        // --- PlayerStand0: 2 анимации ---
+        static FrameBlock playerStand(bool faceRight, int totalFrames = 16)
         {
-            return faceRight ? FrameBlock{0, 8, true} : FrameBlock{8, 8, true};
+            int perAnim = totalFrames / 2;
+            return faceRight
+                       ? FrameBlock{0, perAnim, true}
+                       : FrameBlock{perAnim, perAnim, true};
         }
 
-        // Девушка (без анимации)
-        static FrameBlock girlWait(bool present)
+        // --- PlayerGo / EnemyGo: 4 анимации ---
+        enum class WalkAnim
         {
-            return present ? FrameBlock{0, 1, false} : FrameBlock{1, 1, false};
+            Right,
+            Up,
+            Left,
+            Down
+        };
+
+        static FrameBlock walk(WalkAnim anim, int totalFrames = 32)
+        {
+            int perAnim = totalFrames / 4;
+            switch (anim)
+            {
+            case WalkAnim::Right:
+                return {perAnim * 0, perAnim, true};
+            case WalkAnim::Up:
+                return {perAnim * 1, perAnim, true};
+            case WalkAnim::Left:
+                return {perAnim * 2, perAnim, true};
+            case WalkAnim::Down:
+                return {perAnim * 3, perAnim, true};
+            }
+            return {0, perAnim, true};
         }
 
-        // Враги (Enemy1Go / Enemy2Go)
-        static FrameBlock enemyRunRight() { return {0, 8, true}; }
-        static FrameBlock enemyClimbUp() { return {8, 8, true}; }
-        static FrameBlock enemyRunLeft() { return {16, 8, true}; }
-        static FrameBlock enemyClimbDown() { return {24, 8, true}; }
+        // --- Girl1Wait: 2 состояния ---
+        static FrameBlock girlWait(bool present, int totalFrames = 2)
+        {
+            int perAnim = totalFrames / 2;
+            return present
+                       ? FrameBlock{0, perAnim, false}
+                       : FrameBlock{perAnim, perAnim, false};
+        }
     };
 
 } // namespace vovochka
