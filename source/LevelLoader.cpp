@@ -138,4 +138,39 @@ namespace vovochka
         return true;
     }
 
+    bool LevelLoader::loadDifficulty(int n, DifficultyParams &out) const
+    {
+        IniReader ini;
+        const std::string path = m_root + "/COMMON/GAMECONFIGINF/Levels.cfg";
+        if (!ini.loadFile(path))
+        {
+            TraceLog(LOG_WARNING, "Levels.cfg not loaded: %s", path.c_str());
+            return false;
+        }
+
+        const std::string sec = "Difficulty" + std::to_string(n);
+        if (!ini.hasSection(sec))
+        {
+            TraceLog(LOG_WARNING, "No section [%s] in Levels.cfg", sec.c_str());
+            return false;
+        }
+
+        out.scoreLevel = ini.getInt(sec, "ScoreLevel", out.scoreLevel);
+        out.bombCost = ini.getInt(sec, "BombCost", out.bombCost);
+        out.playerLifeMax = ini.getInt(sec, "PlayerLifeMax", out.playerLifeMax);
+        out.enemyCountMax = ini.getInt(sec, "EnemyCountMax", out.enemyCountMax);
+        out.condomCount = ini.getInt(sec, "CondomCount", out.condomCount);
+        out.playerStrengthCan = ini.getInt(sec, "PlayerStrengthCan", out.playerStrengthCan);
+        out.playerSpeed = ini.getFloat(sec, "PlayerSpeed", out.playerSpeed);
+        out.enemySpeed = ini.getFloat(sec, "EnemySpeed", out.enemySpeed);
+        out.enemyGirlSpeed = ini.getFloat(sec, "EnemyGirlSpeed", out.enemyGirlSpeed);
+        out.enemyGirlLifeMax = ini.getInt(sec, "EnemyGirlLifeMax", out.enemyGirlLifeMax);
+
+        TraceLog(LOG_INFO, "Difficulty%d: condoms=%d enemies=%d score=%d speeds=%.3f/%.3f/%.3f",
+                 n, out.condomCount, out.enemyCountMax, out.scoreLevel,
+                 out.playerSpeed, out.enemySpeed, out.enemyGirlSpeed);
+
+        return true;
+    }
+
 } // namespace vovochka

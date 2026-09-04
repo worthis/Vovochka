@@ -13,13 +13,14 @@ namespace vovochka
                   const SpriteSheetGPU *standSheet,
                   const SpriteSheetGPU *walkSheet,
                   float tileW, float tileH);
-
+        void setInputEnabled(bool b) { m_inputEnabled = b; }
         void update(float dt, const LevelMap &map);
         void draw() const;
 
         bool isClimbing() const;
         bool isFrozenClimb() const { return m_frozenClimb; }
         bool isBehindFrontLayer() const { return isClimbing() || m_frozenClimb; }
+        void placeAt(const LevelMap &map, int tileX, int tileY);
 
         Vector2 getPixelPos() const { return m_pos; }
         int getTileX() const { return m_tileX; }
@@ -45,6 +46,8 @@ namespace vovochka
         bool m_facingRight = true;
         bool m_onLadder = false;
         bool m_prevOnLadder = false;
+
+        bool m_inputEnabled = true;
 
         SpriteLayout::WalkAnim m_currentWalkAnim = SpriteLayout::WalkAnim::Right;
 

@@ -19,13 +19,30 @@ namespace vovochka
                       const SpriteSheetGPU *walkSheet,
                       float tileW, float tileH)
     {
+        // --- полный сброс состояния (критично при смене уровня) ---
+        m_dirX = m_dirY = 0;
+        m_lastDirX = m_lastDirY = 0;
+        m_snapTargetX = m_snapTargetY = 0;
+        m_snapping = false;
+        m_xLocked = false;
+        m_frozenClimb = false;
+        m_facingRight = true;
+        m_onLadder = false;
+        m_prevOnLadder = false;
+        m_currentWalkAnim = SpriteLayout::WalkAnim::Right;
+
         m_tileW = tileW;
         m_tileH = tileH;
 
+        // --- позиция из точки спавна уровня ---
         if (auto start = map.playerStart())
         {
             m_tileX = start->x;
             m_tileY = start->y;
+        }
+        else
+        {
+            m_tileX = m_tileY = 0;
         }
 
         int pw = standSheet ? standSheet->patternW : 104;
@@ -33,18 +50,19 @@ namespace vovochka
         m_pos.x = m_tileX * m_tileW + (m_tileW - pw) * 0.5f;
         m_pos.y = surfaceYForTile(m_tileY) - ph;
 
+        // --- анимации в начальное состояние ---
         m_animStand.sheet = standSheet;
-        m_animStand.setBlock(SpriteLayout::playerStand(true,
-                                                       standSheet ? standSheet->frameCount : 16));
+        m_animStand.setBlock(SpriteLayout::playerStand(true, standSheet ? standSheet->frameCount : 16));
         m_animStand.frameTime = 0.10f;
+        m_animStand.timer = 0.0f;
+        m_animStand.frame = 0;
 
         m_animWalk.sheet = walkSheet;
-        m_animWalk.setBlock(SpriteLayout::walk(SpriteLayout::WalkAnim::Right,
-                                               walkSheet ? walkSheet->frameCount : 32));
+        m_animWalk.setBlock(SpriteLayout::walk(SpriteLayout::WalkAnim::Right, walkSheet ? walkSheet->frameCount : 32));
         m_animWalk.frameTime = 0.06f;
-        m_currentWalkAnim = SpriteLayout::WalkAnim::Right;
+        m_animWalk.timer = 0.0f;
+        m_animWalk.frame = 0;
 
-        m_prevOnLadder = false;
         updateState(map);
     }
 
@@ -53,7 +71,6 @@ namespace vovochka
 
     float Player::surfaceYForTile(int tileY) const
     {
-        // уровень земли: ноги на (tileY+1)*tileH - 0.4*tileH (подобрано ранее)
         return (tileY + 1) * m_tileH - m_tileH * 0.4f;
     }
 
@@ -61,16 +78,19 @@ namespace vovochka
     {
         const int pw = patW(), ph = patH();
 
-        // --- ввод ---
+        // --- Ввод ---
         int inX = 0, inY = 0;
-        if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A))
-            inX = -1;
-        if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D))
-            inX = +1;
-        if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W))
-            inY = -1;
-        if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S))
-            inY = +1;
+        if (m_inputEnabled)
+        {
+            if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A))
+                inX = -1;
+            if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D))
+                inX = +1;
+            if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W))
+                inY = -1;
+            if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S))
+                inY = +1;
+        }
 
         const TileKind here = map.kindAt(m_tileX, m_tileY);
         const TileKind above = map.kindAt(m_tileX, m_tileY - 1);
@@ -300,7 +320,6 @@ namespace vovochka
         if (!map.inBounds(tx, ty))
             return false;
         TileKind from = map.kindAt(fx, fy);
-        TileKind to = map.kindAt(tx, ty);
 
         if (fy == ty)
         { // горизонталь
@@ -319,7 +338,7 @@ namespace vovochka
 
     void Player::checkTileCrossing(const LevelMap &map)
     {
-        const int pw = patW(), ph = patH();
+        const int pw = patW();
         int nx = static_cast<int>((m_pos.x + pw * 0.5f) / m_tileW);
         int ny = static_cast<int>(feetY() / m_tileH);
 
@@ -450,6 +469,20 @@ namespace vovochka
         float feet = m_pos.y + ph;
         feet = std::clamp(feet, 0.0f, mapH);
         m_pos.y = feet - ph;
+    }
+
+    void Player::placeAt(const LevelMap &map, int tileX, int tileY)
+    {
+        m_tileX = tileX;
+        m_tileY = tileY;
+        m_dirX = m_dirY = m_lastDirX = m_lastDirY = 0;
+        m_snapping = false;
+        m_xLocked = false;
+        m_frozenClimb = false;
+        const int pw = patW(), ph = patH();
+        m_pos.x = tileX * m_tileW + (m_tileW - pw) * 0.5f;
+        m_pos.y = surfaceYForTile(tileY) - ph;
+        updateState(map);
     }
 
 } // namespace vovochka

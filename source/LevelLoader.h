@@ -7,6 +7,21 @@
 namespace vovochka
 {
 
+    // Параметры из Levels.cfg — [Difficulty1..3], выбираются перед игрой
+    struct DifficultyParams
+    {
+        int scoreLevel = 35;
+        int bombCost = 1;
+        int playerLifeMax = 80;
+        int enemyCountMax = 3;
+        int condomCount = 88;
+        int playerStrengthCan = 4;
+        float playerSpeed = 0.080f;
+        float enemySpeed = 0.015f;
+        float enemyGirlSpeed = 0.025f;
+        int enemyGirlLifeMax = 1;
+    };
+
     // Читает карты (.map) и спрайт-листы (GameSprites.dat) из папки data.
     // Иерархия папок (из оригинала):
     //   data/MAP/LevelN.map
@@ -20,6 +35,8 @@ namespace vovochka
 
         // Путь к файлу карты: data/MAP/LevelN.map
         std::string mapPath(int level) const;
+
+        bool loadDifficulty(int n, DifficultyParams &out) const; // n = 1..3
 
         // Парсит бинарный .map-файл. Порядок тайлов — x * height + y (столбцы).
         bool loadMap(int level, LevelMap &out) const;
