@@ -23,9 +23,11 @@ namespace vovochka
         int getTileY() const { return m_tileY; }
         Rectangle getBounds() const;
         bool isBehindFrontLayer() const { return m_snapping && m_dirY != 0; }
-        bool isOnLadder(const LevelMap& map) const;
-        void startAttack(bool faceRight);
+        bool isOnLadder(const LevelMap &map) const;
+        void startAttack(bool faceRight, bool loop = false);
+        void stopAttack();
         Vector2 getPixelPos() const { return m_pos; }
+        void setTarget(const LevelMap &map, int tx, int ty);
 
         bool alive = true;
         bool isBoss = false;
@@ -33,6 +35,14 @@ namespace vovochka
         int bombHits = 0;
 
     private:
+        // A* pathfinding к цели
+        struct PathNode
+        {
+            int x, y;
+            float g, h, f;
+            int parentX, parentY;
+        };
+
         Vector2 m_pos{};
         int m_tileX = 0, m_tileY = 0;
         int m_dirX = 0, m_dirY = 0;
@@ -63,6 +73,8 @@ namespace vovochka
         void chooseDirection(const LevelMap &map);
         void stepSnap(float dt, const LevelMap &map);
         void clampToMap(const LevelMap &map);
+
+        void updateAI(const LevelMap &map);
     };
 
 } // namespace vovochka

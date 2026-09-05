@@ -206,7 +206,9 @@ namespace vovochka
             }
         }
 
-        m_player.setInputEnabled(!m_intimacy.active && m_deathTimer <= 0.0f);
+        m_player.setInputEnabled(!m_intimacy.active &&
+                                 !m_bossIntimacy.active &&
+                                 m_deathTimer <= 0.0f);
         m_player.update(dt, m_map);
 
         if (m_player.takeMakeBombFinished())
@@ -221,24 +223,34 @@ namespace vovochka
 
         m_hurtTimer = std::max(0.0f, m_hurtTimer - dt);
         for (auto &e : m_enemies)
+        {
+            if (e.isBoss && !m_bossIntimacy.active)
+            {
+                // Босс охотится на игрока
+                e.setTarget(m_map, m_player.getTileX(), m_player.getTileY());
+            }
             e.update(dt, m_map);
+        }
 
         // контакт враг-игрок: атака, урон, прерывания
         if (m_deathTimer <= 0.0f &&
             m_hurtTimer <= 0.0f &&
+            !m_bossIntimacy.active &&
             !m_player.isHurt())
         {
             Rectangle pr = m_player.getBounds();
 
-            for (auto &e : m_enemies)
+            for (size_t i = 0; i < m_enemies.size(); ++i)
             {
-                if (!e.alive || e.isBoss)
+                auto &e = m_enemies[i];
+
+                if (!e.alive)
                     continue;
 
                 if (!CheckCollisionRecs(pr, e.getBounds()))
                     continue;
 
-                // 3: контакт прерывает создание бомбы (бомба не ставится, Power не возвращается)
+                // контакт прерывает создание бомбы (бомба не ставится, Power не возвращается)
                 m_player.cancelMakeBomb();
 
                 // прерывание близости: девушка потрачена в любом случае
@@ -248,13 +260,22 @@ namespace vovochka
                 // урон: -10 HP (одно деление шкалы), i-frames 1 c
                 damagePlayer(10);
 
-                // 2: анимация получения урона игроком (PlayerUndoAttack)
-                if (!m_player.isOnLadderNow())
-                    m_player.startHurt();
+                if (e.isBoss &&
+                    m_stats.power > 0)
+                {
+                    startBossIntimacy(static_cast<int>(i));
+                }
+                else
+                {
+                    // анимация получения урона игроком
+                    if (!m_player.isOnLadderNow())
+                        m_player.startHurt();
 
-                // 1: анимация атаки врага (Enemy1Attack/Enemy2Attack) в сторону игрока
-                if (!e.isOnLadder(m_map))
-                    e.startAttack(m_player.getPixelPos().x >= e.getPixelPos().x);
+                    // анимация атаки врага в сторону игрока
+                    if (!e.isBoss &&
+                        !e.isOnLadder(m_map))
+                        e.startAttack(m_player.getPixelPos().x >= e.getPixelPos().x);
+                }
 
                 break; // один контакт за кадр
             }
@@ -303,6 +324,39 @@ namespace vovochka
         m_intimacy.active = false;
     }
 
+    void Game::startBossIntimacy(int idx)
+    {
+        m_bossIntimacy.active = true;
+        m_bossIntimacy.t = 0.0f;
+        m_bossIntimacy.girlIdx = idx;
+        m_bossIntimacy.powerStart = static_cast<float>(m_stats.power);
+
+        auto &b = m_enemies[idx];
+        b.startAttack(m_player.getPixelPos().x >= b.getPixelPos().x, true);
+
+        // Длительность пропорциональна Power (как с девушками)
+        m_bossIntimacy.duration = std::max({3.326f,
+                                            soundDuration("KISS"),
+                                            soundDuration("GirlScream")});
+        m_bossIntimacy.duration *= m_stats.power;
+        m_bossIntimacy.duration /= m_stats.powerMax;
+
+        // Звуки: те же что и с девушками (или другие?)
+        // playSound("GirlScream");
+        // playSound("KISS");
+    }
+
+    void Game::endBossIntimacy()
+    {
+        m_bossIntimacy.active = false;
+        auto& b = m_enemies[m_bossIntimacy.girlIdx];
+        b.stopAttack();
+
+        // Босс возвращается в охоту
+        // stopSound("GirlScream");
+        // stopSound("KISS");
+    }
+
     void Game::updateGameplay(float dt)
     {
         const float tw = static_cast<float>(m_renderer.tileW());
@@ -311,6 +365,7 @@ namespace vovochka
 
         // --- бомба: Пробел, стоит BombCost Power, в ТАЙЛЕ игрока ---
         if (!m_intimacy.active &&
+            !m_bossIntimacy.active &&
             m_deathTimer <= 0.0f &&
             IsKeyPressed(KEY_SPACE) &&
             !m_player.isMakingBomb() &&
@@ -332,6 +387,17 @@ namespace vovochka
             m_stats.score = std::min(100.0f, m_stats.score + 2.0f * m_intimacy.powerStart * dt / m_intimacy.duration);
             if (k >= 1.0f)
                 endIntimacy();
+        }
+
+        // "Близость с боссом": Power → Score (в отрицательную сторону)
+        if (m_bossIntimacy.active)
+        {
+            m_bossIntimacy.t += dt;
+            const float k = std::min(1.0f, m_bossIntimacy.t / m_bossIntimacy.duration);
+            m_stats.power = (int)std::ceil(m_bossIntimacy.powerStart * (1.0f - k));
+            m_stats.score = std::max(0.0f, m_stats.score - 2.0f * m_intimacy.powerStart * dt / m_intimacy.duration);
+            if (k >= 1.0f)
+                endBossIntimacy();
         }
 
         // --- подбор презервативов: +1 Power, декремент стека ---
@@ -362,7 +428,8 @@ namespace vovochka
         // --- девушки: попытка близости ---
         constexpr float kGirlTriggerMargin = 8.0f; // срабатывать чуть раньше границы (тюнинг)
         m_laughTimer = std::max(0.0f, m_laughTimer - dt);
-        if (!m_intimacy.active)
+        if (!m_intimacy.active &&
+            !m_bossIntimacy.active)
         {
             for (size_t i = 0; i < m_entities.size(); ++i)
             {
@@ -459,7 +526,9 @@ namespace vovochka
 
         // --- 6. Игрок (лезет по лестнице) ---
         const bool playerBehind = m_player.isBehindFrontLayer();
-        if (!m_intimacy.active && playerBehind)
+        if (!m_intimacy.active &&
+            !m_bossIntimacy.active &&
+            playerBehind)
             m_player.draw();
 
         // --- 7. Враги ---
@@ -471,7 +540,9 @@ namespace vovochka
         m_renderer.drawFrontLayer(m_map);
 
         // --- 9. Игрок (идет мимо лестницы) ---
-        if (!m_intimacy.active && !playerBehind)
+        if (!m_intimacy.active &&
+            !m_bossIntimacy.active &&
+            !playerBehind)
             m_player.draw();
 
         // --- 10. Враги (идет мимо лестницы) ---
@@ -676,31 +747,50 @@ namespace vovochka
         };
 
         int m_nextEnemyId = 0;
-        for (int i = 0; i < m_diff.enemyCountMax; ++i)
+
+        // Обычные враги
+        const SpriteSheetGPU *enemyGoSheet = m_renderer.sheet("Enemy1Go");
+        const SpriteSheetGPU *enemyAttackSheet = m_renderer.sheet("Enemy1Attack");
+        if (enemyGoSheet &&
+            enemyAttackSheet)
         {
-            auto p = rndPoint();
-            Enemy e;
-            e.init(m_map,
-                   m_renderer.sheet("Enemy1Go"),
-                   m_renderer.sheet("Enemy1Attack"),
-                   p.first, p.second, m_diff.enemySpeed * kSpeedScale, false, tw, th);
-            e.id = m_nextEnemyId++;
-            m_enemies.push_back(std::move(e));
+            for (int i = 0; i < m_diff.enemyCountMax; ++i)
+            {
+                auto p = rndPoint();
+                Enemy e;
+                e.init(m_map,
+                       enemyGoSheet,
+                       enemyAttackSheet,
+                       p.first, p.second, m_diff.enemySpeed * kSpeedScale, false, tw, th);
+                e.id = m_nextEnemyId++;
+                m_enemies.push_back(std::move(e));
+            }
+        }
+        else
+        {
+            TraceLog(LOG_WARNING, "No Enemy animation sheets — enemy not spawned");
         }
 
-        /*if (const SpriteSheetGPU *bs = m_renderer.sheet("EnemyGirlGo"))
+        // Босс (EnemyGirl) — одна на уровень
+        const SpriteSheetGPU *enemyGirlGoSheet = m_renderer.sheet("Enemy2Go");
+        const SpriteSheetGPU *enemyGirlAttackSheet = m_renderer.sheet("Enemy2Attack");
+        if (enemyGirlGoSheet &&
+            enemyGirlAttackSheet)
         {
             auto p = rndPoint();
             Enemy b;
             b.init(m_map,
-                   bs,
+                   enemyGirlGoSheet,
+                   enemyGirlAttackSheet,
                    p.first, p.second, m_diff.enemyGirlSpeed * kSpeedScale, true, tw, th);
+            b.id = m_nextEnemyId++;
             m_enemies.push_back(std::move(b));
+            TraceLog(LOG_INFO, "Boss spawned at tile (%d, %d)", p.first, p.second);
         }
         else
         {
-            TraceLog(LOG_WARNING, "No EnemyGirlGo sheet — boss not spawned");
-        }*/
+            TraceLog(LOG_WARNING, "No EnemyGirl animation sheets — boss not spawned");
+        }
     }
 
     void Game::spawnBombAtPlayer()

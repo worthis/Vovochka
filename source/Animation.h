@@ -25,8 +25,10 @@ namespace vovochka
 
         void update(float dt)
         {
+            // статичный кадр
             if (!sheet || block.count <= 1)
-                return; // статичный кадр
+                return;
+
             timer += dt;
             while (timer >= frameTime)
             {

@@ -55,12 +55,13 @@ namespace vovochka
 
         if (m_attacking)
         {
-            m_attackT += dt;
             m_animAttack.update(dt);
-            if (m_attackT >= m_attackDuration)
+            m_attackT += dt;
+            if (!m_animAttack.block.loop &&
+                m_attackT >= m_attackDuration)
             {
                 m_attacking = false;
-                chooseDirection(map); // отыграл — вернулся в патруль
+                chooseDirection(map);
             }
             return;
         }
@@ -254,7 +255,7 @@ namespace vovochka
         return k == TileKind::Ladder || k == TileKind::LadderBase || k == TileKind::LadderTop;
     }
 
-    void Enemy::startAttack(bool faceRight)
+    void Enemy::startAttack(bool faceRight, bool loop)
     {
         if (!m_animAttack.sheet || m_animAttack.sheet->frameCount < 2)
             return;
@@ -265,8 +266,102 @@ namespace vovochka
         m_dirX = m_dirY = 0;
 
         const int half = m_animAttack.sheet->frameCount / 2;
-        m_animAttack.setBlock(FrameBlock{faceRight ? 0 : half, half, false});
+        m_animAttack.setBlock(FrameBlock{faceRight ? 0 : half, half, loop});
         m_attackDuration = half * m_animAttack.frameTime;
+    }
+
+    void Enemy::stopAttack()
+    {
+        m_attacking = false;
+    }
+
+    void Enemy::setTarget(const LevelMap &map, int tx, int ty)
+    {
+        // A* pathfinding: найти кратчайший путь от (m_tileX, m_tileY) к (tx, ty)
+        // Упрощённая версия: greedy best-first (двигаться в направлении цели)
+
+        // Приоритет: вертикаль если на лестнице, иначе горизонталь
+        bool L, R, U, D;
+        getAllowed(map, L, R, U, D);
+
+        int bestX = 0, bestY = 0;
+        float bestDist = 1e9f;
+
+        if (L)
+        {
+            float dist = std::abs((m_tileX - 1) - tx) + std::abs(m_tileY - ty);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                bestX = -1;
+                bestY = 0;
+            }
+        }
+        if (R)
+        {
+            float dist = std::abs((m_tileX + 1) - tx) + std::abs(m_tileY - ty);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                bestX = 1;
+                bestY = 0;
+            }
+        }
+        if (U)
+        {
+            float dist = std::abs(m_tileX - tx) + std::abs((m_tileY - 1) - ty);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                bestX = 0;
+                bestY = -1;
+            }
+        }
+        if (D)
+        {
+            float dist = std::abs(m_tileX - tx) + std::abs((m_tileY + 1) - ty);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                bestX = 0;
+                bestY = 1;
+            }
+        }
+
+        // Если некуда идти — случайное направление
+        if (bestX == 0 && bestY == 0)
+        {
+            chooseDirection(map);
+            return;
+        }
+
+        m_dirX = bestX;
+        m_dirY = bestY;
+        m_snapTargetX = m_tileX + bestX;
+        m_snapTargetY = m_tileY + bestY;
+        m_snapping = true;
+
+        // Анимация
+        SpriteLayout::WalkAnim a;
+        if (m_dirY != 0)
+            a = (m_dirY < 0) ? SpriteLayout::WalkAnim::Up : SpriteLayout::WalkAnim::Down;
+        else if (m_dirX > 0)
+            a = SpriteLayout::WalkAnim::Right;
+        else
+            a = SpriteLayout::WalkAnim::Left;
+        if (a != m_currentWalkAnim && m_animWalk.sheet)
+        {
+            m_currentWalkAnim = a;
+            m_animWalk.setBlock(SpriteLayout::walk(a, m_animWalk.sheet->frameCount));
+        }
+    }
+
+    void Enemy::updateAI(const LevelMap &map)
+    {
+        if (!alive || !isBoss)
+            return;
+        // Босс охотится всегда (можно добавить условие по Power позже)
+        // setTarget вызывается из Game::update() с координатами игрока
     }
 
     void Enemy::draw() const

@@ -49,9 +49,9 @@ namespace vovochka
         struct IntimacySession
         {
             bool active = false;
+            int girlIdx = -1;
             float t = 0.0f;
             float duration = 3.326f;
-            int girlIdx = -1;
             float powerStart = 0;
         };
 
@@ -77,6 +77,7 @@ namespace vovochka
         Stats m_stats{};
         DifficultyParams m_diff{};
         IntimacySession m_intimacy{};
+        IntimacySession m_bossIntimacy{};
         std::vector<PreviewEntity> m_entities;
         std::vector<std::pair<int, int>> m_freePoints; // тайлы земли для спавна
         std::vector<CondomStack> m_condoms;
@@ -107,12 +108,14 @@ namespace vovochka
         void updateGameplay(float dt);
         void updateBombs(float dt);
 
-        void explosionDamage(Bomb &b, const Rectangle& exRect);
+        void explosionDamage(Bomb &b, const Rectangle &exRect);
         void damagePlayer(int dmg);
         void killPlayer();
 
         void startIntimacy(int girlIdx);
         void endIntimacy();
+        void startBossIntimacy(int bossIdx);
+        void endBossIntimacy();
 
         void processInput();
         void update(float dt);
