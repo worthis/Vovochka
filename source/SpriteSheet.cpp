@@ -61,11 +61,10 @@ namespace vovochka
 
     Color SpriteSheetManager::unpackColor(uint32_t rgb)
     {
-        return Color{
-            static_cast<unsigned char>((rgb >> 16) & 0xFF),
-            static_cast<unsigned char>((rgb >> 8) & 0xFF),
-            static_cast<unsigned char>(rgb & 0xFF),
-            255};
+        return Color{static_cast<unsigned char>((rgb >> 16) & 0xFF),
+                     static_cast<unsigned char>((rgb >> 8) & 0xFF),
+                     static_cast<unsigned char>(rgb & 0xFF),
+                     255};
     }
 
     // Ручной chroma-key: все пиксели, близкие к key, делаем полностью прозрачными.

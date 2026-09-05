@@ -18,13 +18,12 @@ namespace vovochka
         std::string name; // имя секции, например "Set2", "PlayerGo", "Girl1Wait"
         std::string file; // имя файла (Picture=...), по умолчанию "<name>.bmp"
 
-        int pictureW = 0;
-        int pictureH = 0;
-        int patternW = 0;
-        int patternH = 0;
+        int pictureW = 0; // ширина атласа спрайтов
+        int pictureH = 0; // высота атласа спрайтов
+        int patternW = 0; // ширина спрайта
+        int patternH = 0; // высота спрайта
         int skipW = 0;
         int skipH = 0;
-
         bool transparent = false;
         uint32_t transparentColor = 0x00FF00; // clLime
 
@@ -58,11 +57,10 @@ namespace vovochka
             const int cellH = patternH + skipH;
             const int ix = index % cols;
             const int iy = index / cols;
-            return Rectangle{
-                static_cast<float>(skipW + ix * cellW),
-                static_cast<float>(skipH + iy * cellH),
-                static_cast<float>(patternW),
-                static_cast<float>(patternH)};
+            return Rectangle{static_cast<float>(skipW + ix * cellW),
+                             static_cast<float>(skipH + iy * cellH),
+                             static_cast<float>(patternW),
+                             static_cast<float>(patternH)};
         }
     };
 
@@ -92,7 +90,6 @@ namespace vovochka
 
     private:
         std::unordered_map<std::string, SpriteSheetGPU> m_sheets;
-
         static Color unpackColor(uint32_t rgb);
     };
 

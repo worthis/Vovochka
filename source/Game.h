@@ -4,6 +4,7 @@
 #include "LevelRenderer.h"
 #include "Animation.h"
 #include "Player.h"
+#include "Enemy.h"
 #include "raylib.h"
 #include <unordered_map>
 
@@ -19,7 +20,6 @@ namespace vovochka
         bool init(int screenW, int screenH, const char *title);
         void run();
         void shutdown();
-
         void setLevel(int n); // 1..12
 
     private:
@@ -55,6 +55,19 @@ namespace vovochka
             float powerStart = 0;
         };
 
+        struct Bomb
+        {
+            int tileX = 0, tileY = 0;
+            float x = 0, y = 0;
+            float t = 0;
+            float fuse = 2.0f; // время жизни до взрыва
+            bool exploding = false;
+            float explodeT = 0;
+            float explodeDuration = 0;
+            bool playerHit = false;       // игрок задел один раз
+            std::vector<int> hitEnemyIds; // каждый враг — один раз
+        };
+
         Camera2D m_camera{};
         std::string m_dataRoot;
         LevelLoader m_loader{m_dataRoot};
@@ -68,6 +81,7 @@ namespace vovochka
         std::vector<std::pair<int, int>> m_freePoints; // тайлы земли для спавна
         std::vector<CondomStack> m_condoms;
         std::unordered_map<std::string, Sound> m_sounds;
+        std::vector<Enemy> m_enemies;
 
         float m_laughTimer = 0.0f;
         bool m_exitActive = false;
@@ -75,24 +89,40 @@ namespace vovochka
         int m_currentLevel = 1;
         bool m_debugGrid = false;
         bool m_running = false;
+        float m_deathTimer = 0.0f;
+        float m_hurtTimer = 0.0f; // i-frames после урона
 
-        static constexpr float kParallaxFactor = 0.3f; // Параллакс фона: 0 = неподвижен, 1 = вместе с камерой
+        std::vector<Bomb> m_bombs;
+
+        static constexpr float kBombFuse = 2.0f;            // время фитиля бомбы
+        static constexpr float kExplosionFrameTime = 0.05f; // время анимации взрыва
+        static constexpr float kExplosionDy = -70.0f;       // положение анимации взрыва по оси Y
+        static constexpr float kParallaxFactor = 0.3f;      // Параллакс фона: 0 = неподвижен, 1 = вместе с камерой
 
         void buildFreePoints();
         void spawnCondoms();
+        void spawnBombAtPlayer();
+        void spawnEnemies();
 
         void updateGameplay(float dt);
+        void updateBombs(float dt);
+
+        void explosionDamage(Bomb &b, const Rectangle& exRect);
+        void damagePlayer(int dmg);
+        void killPlayer();
+
         void startIntimacy(int girlIdx);
         void endIntimacy();
 
         void processInput();
         void update(float dt);
-        void render();
         void updateCamera();
+        void render();
 
         void loadSounds();
         void unloadSounds();
         void playSound(const char *name);
+        void stopSound(const char *name);
         float soundDuration(const char *name) const;
     };
 

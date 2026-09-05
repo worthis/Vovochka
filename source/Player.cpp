@@ -17,6 +17,8 @@ namespace vovochka
     void Player::init(const LevelMap &map,
                       const SpriteSheetGPU *standSheet,
                       const SpriteSheetGPU *walkSheet,
+                      const SpriteSheetGPU *makeBombSheet,
+                      const SpriteSheetGPU *hurtSheet,
                       float tileW, float tileH)
     {
         // --- полный сброс состояния (критично при смене уровня) ---
@@ -30,6 +32,12 @@ namespace vovochka
         m_onLadder = false;
         m_prevOnLadder = false;
         m_currentWalkAnim = SpriteLayout::WalkAnim::Right;
+
+        m_animBomb.sheet = makeBombSheet;
+        m_animBomb.frameTime = 0.08f;
+
+        m_animHurt.sheet = hurtSheet;
+        m_animHurt.frameTime = 0.08f;
 
         m_tileW = tileW;
         m_tileH = tileH;
@@ -74,9 +82,91 @@ namespace vovochka
         return (tileY + 1) * m_tileH - m_tileH * 0.4f;
     }
 
-    void Player::update(float dt, const LevelMap &map)
+    void Player::stepSnap(float dt, const LevelMap &map)
     {
         const int pw = patW(), ph = patH();
+        const float targetPxX = m_snapTargetX * m_tileW + (m_tileW - pw) * 0.5f;
+        const float targetPxY = surfaceYForTile(m_snapTargetY) - ph;
+
+        const float ddx = targetPxX - m_pos.x;
+        const float ddy = targetPxY - m_pos.y;
+        const float dist = std::sqrt(ddx * ddx + ddy * ddy);
+
+        if (dist < 2.0f)
+        {
+            // доехали
+            m_pos.x = targetPxX;
+            m_pos.y = targetPxY;
+            m_tileX = m_snapTargetX;
+            m_tileY = m_snapTargetY;
+            m_snapping = false;
+            m_xLocked = false;
+            updateState(map);
+        }
+        else
+        {
+            float step = m_speed * dt;
+            if (step > dist)
+                step = dist;
+            m_pos.x += (ddx / dist) * step;
+            m_pos.y += (ddy / dist) * step;
+        }
+    }
+
+    void Player::update(float dt, const LevelMap &map)
+    {
+        const int pw = patW();
+
+        // --- получение урона: стоим, анимация один раз ---
+        if (m_hurt)
+        {
+            m_hurtT += dt;
+            m_animHurt.update(dt);
+            if (m_hurtT >= m_hurtDuration)
+            {
+                m_hurt = false;
+                switchToStandAnim();
+                m_animStand.update(dt);
+            }
+            clampToMap(map);
+            return;
+        }
+
+        // --- подготовка к бомбе: сначала дойти ВПЕРЁД с ходьбой, потом анимация ---
+        if (m_wantMakeBomb)
+        {
+            if (m_snapping)
+            {
+                stepSnap(dt, map);
+                switchWalkAnim(m_lastDirX, m_lastDirY); // ходьба как обычно
+                m_animWalk.update(dt);
+                if (!m_snapping)
+                    beginBombAnim(); // доехали — запускаем анимацию
+            }
+            else
+            {
+                beginBombAnim();
+            }
+            clampToMap(map);
+            return;
+        }
+
+        // --- сама анимация создания бомбы: стоим на центре тайла ---
+        if (m_makingBomb)
+        {
+            m_makeBombT += dt;
+            m_animBomb.update(dt);
+            if (m_makeBombT >= m_makeBombDuration)
+            {
+                m_makingBomb = false;
+                m_makeBombFinishedFlag = m_makeBombPending;
+                m_makeBombPending = false;
+                switchToStandAnim();
+                m_animStand.update(dt);
+            }
+            clampToMap(map);
+            return;
+        }
 
         // --- Ввод ---
         int inX = 0, inY = 0;
@@ -194,38 +284,22 @@ namespace vovochka
 
         if (m_snapping)
         {
-            float targetPxX = m_snapTargetX * m_tileW + (m_tileW - pw) * 0.5f;
-            float targetPxY = surfaceYForTile(m_snapTargetY) - ph;
-
-            float ddx = targetPxX - m_pos.x;
-            float ddy = targetPxY - m_pos.y;
-            float dist = std::sqrt(ddx * ddx + ddy * ddy);
-
-            if (dist < 2.0f)
+            stepSnap(dt, map);
+            if (m_snapping)
             {
-                m_pos.x = targetPxX;
-                m_pos.y = targetPxY;
-                m_tileX = m_snapTargetX;
-                m_tileY = m_snapTargetY;
-                m_snapping = false;
-                m_xLocked = false;
-                updateState(map);
+                // ещё едем — анимация ходьбы в последнем направлении
+                switchWalkAnim(m_lastDirX, m_lastDirY);
+                m_animWalk.update(dt);
+            }
+            else
+            {
+                // доехали: стойка или замершее карабкание
                 m_frozenClimb = isFrozenClimbSpot(map);
                 if (!m_frozenClimb)
                 {
                     switchToStandAnim();
                     m_animStand.update(dt);
                 }
-            }
-            else
-            {
-                float step = m_speed * dt;
-                if (step > dist)
-                    step = dist;
-                m_pos.x += (ddx / dist) * step;
-                m_pos.y += (ddy / dist) * step;
-                switchWalkAnim(m_lastDirX, m_lastDirY);
-                m_animWalk.update(dt);
             }
             clampToMap(map);
             return;
@@ -240,16 +314,8 @@ namespace vovochka
         }
         else
         {
-            // стоим на центре тайла
             m_frozenClimb = isFrozenClimbSpot(map);
-
-            if (m_frozenClimb)
-            {
-                // Анимация НЕ переключается на stand и НЕ обновляется:
-                // текущий кадр карабкания замирает (игрок висит на лестнице).
-                // Блок Up/Down уже выбран во время движения — просто не трогаем.
-            }
-            else
+            if (!m_frozenClimb)
             {
                 switchToStandAnim();
                 m_animStand.update(dt);
@@ -447,11 +513,125 @@ namespace vovochka
 
     void Player::draw() const
     {
+        if (m_hurt)
+        {
+            m_animHurt.draw(m_pos.x, m_pos.y, false);
+            return;
+        }
+
+        if (m_makingBomb)
+        {
+            m_animBomb.draw(m_pos.x, m_pos.y, false);
+            return;
+        }
+
         bool moving = m_snapping || m_dirX != 0 || m_dirY != 0;
         if (moving || m_frozenClimb)
             m_animWalk.draw(m_pos.x, m_pos.y, false);
         else
             m_animStand.draw(m_pos.x, m_pos.y, false);
+    }
+
+    bool Player::canPlaceBomb(const LevelMap &map) const
+    {
+        const TileKind k = map.kindAt(m_tileX, m_tileY);
+        if (k == TileKind::Platform || k == TileKind::LadderTop)
+            return true;
+        if (k == TileKind::LadderBase) // на стыке — только стоя на уровне земли
+            return std::abs(feetY() - surfaceYForTile(m_tileY)) <= kSurfaceEps;
+        return false; // на лестнице нельзя
+    }
+
+    void Player::startMakeBomb(const LevelMap &map)
+    {
+        if (m_makingBomb || m_wantMakeBomb)
+            return;
+
+        m_dirX = m_dirY = 0;
+        m_xLocked = false;
+
+        // стоим на центре (или направления нет) — анимация сразу
+        if (isOnTileCenter() || (m_lastDirX == 0 && m_lastDirY == 0))
+        {
+            beginBombAnim();
+            return;
+        }
+
+        const float centerX = m_pos.x + patW() * 0.5f;
+        const float colC = m_tileX * m_tileW + m_tileW * 0.5f;
+        const float feet = m_pos.y + patH();
+        const float rowC = surfaceYForTile(m_tileY);
+
+        // ближайший центр тайла ВПЕРЕЁД по последнему направлению
+        int tx = m_tileX, ty = m_tileY;
+        if (m_lastDirX > 0)
+            tx = (centerX <= colC) ? m_tileX : m_tileX + 1;
+        if (m_lastDirX < 0)
+            tx = (centerX >= colC) ? m_tileX : m_tileX - 1;
+        if (m_lastDirY > 0)
+            ty = (feet <= rowC) ? m_tileY : m_tileY + 1;
+        if (m_lastDirY < 0)
+            ty = (feet >= rowC) ? m_tileY : m_tileY - 1;
+
+        // вперёд закрыто — НЕ откатываемся: бомба на месте
+        if ((tx != m_tileX || ty != m_tileY) &&
+            !canPassThrough(m_tileX, m_tileY, tx, ty, map))
+        {
+            beginBombAnim();
+            return;
+        }
+
+        // идём вперёд с ходьбой, анимация бомбы — после прибытия
+        m_wantMakeBomb = true;
+        m_snapping = true;
+        m_snapTargetX = tx;
+        m_snapTargetY = ty;
+    }
+
+    void Player::beginBombAnim()
+    {
+        if (!m_animBomb.sheet || m_animBomb.sheet->frameCount < 2)
+            return;
+
+        m_wantMakeBomb = false;
+        m_makingBomb = true;
+        m_makeBombPending = true;
+        m_makeBombT = 0.0f;
+        m_snapping = false;
+
+        const int half = m_animBomb.sheet->frameCount / 2;
+        m_animBomb.setBlock(FrameBlock{m_facingRight ? 0 : half, half, false});
+        m_makeBombDuration = half * m_animBomb.frameTime;
+    }
+
+    void Player::cancelMakeBomb()
+    {
+        m_wantMakeBomb = false;
+        m_makingBomb = false;
+        m_makeBombPending = false;
+    }
+
+    bool Player::takeMakeBombFinished()
+    {
+        const bool f = m_makeBombFinishedFlag;
+        m_makeBombFinishedFlag = false;
+        return f;
+    }
+
+    void Player::startHurt()
+    {
+        if (!m_animHurt.sheet || m_animHurt.sheet->frameCount < 2)
+            return;
+
+        m_hurt = true;
+        m_hurtT = 0.0f;
+        m_snapping = false;
+        m_dirX = m_dirY = 0;
+
+        // две половинки: вправо / влево — по текущей ориентации
+        const int half = m_animHurt.sheet->frameCount / 2;
+        m_animHurt.setBlock(FrameBlock{m_facingRight ? 0 : half, half, false});
+        m_hurtDuration = half * m_animHurt.frameTime;
     }
 
     void Player::clampToMap(const LevelMap &map)

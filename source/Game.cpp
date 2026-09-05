@@ -86,7 +86,10 @@ namespace vovochka
         m_intimacy = IntimacySession{};
         m_laughTimer = 0.0f;
         m_exitActive = false;
+        m_hurtTimer = 0.0f;
+        m_deathTimer = 0.0f;
         m_currentLevel = std::clamp(n, 1, 12);
+
         m_renderer.unload();
 
         if (!m_loader.loadMap(m_currentLevel, m_map))
@@ -107,13 +110,17 @@ namespace vovochka
         m_player.init(m_map,
                       m_renderer.sheet("PlayerStand0"),
                       m_renderer.sheet("PlayerGo"),
+                      m_renderer.sheet("PlayerMakeBomb"),
+                      m_renderer.sheet("PlayerUndoAttack"),
                       tw, th);
 
         m_loader.loadDifficulty(m_difficulty, m_diff);
 
         buildFreePoints();
         spawnCondoms();
+        spawnEnemies();
 
+        m_bombs.clear();
         m_entities.clear();
         for (const auto &o : m_map.objects)
         {
@@ -188,12 +195,70 @@ namespace vovochka
 
     void Game::update(float dt)
     {
-        m_player.setInputEnabled(!m_intimacy.active);
+        // гибель игрока: пауза и рестарт уровня
+        if (m_deathTimer > 0.0f)
+        {
+            m_deathTimer -= dt;
+            if (m_deathTimer <= 0.0f)
+            {
+                setLevel(m_currentLevel);
+                return;
+            }
+        }
+
+        m_player.setInputEnabled(!m_intimacy.active && m_deathTimer <= 0.0f);
         m_player.update(dt, m_map);
+
+        if (m_player.takeMakeBombFinished())
+            spawnBombAtPlayer();
+
         updateCamera();
         updateGameplay(dt);
+        updateBombs(dt);
+
         for (auto &e : m_entities)
             e.anim.update(dt);
+
+        m_hurtTimer = std::max(0.0f, m_hurtTimer - dt);
+        for (auto &e : m_enemies)
+            e.update(dt, m_map);
+
+        // контакт враг-игрок: атака, урон, прерывания
+        if (m_deathTimer <= 0.0f &&
+            m_hurtTimer <= 0.0f &&
+            !m_player.isHurt())
+        {
+            Rectangle pr = m_player.getBounds();
+
+            for (auto &e : m_enemies)
+            {
+                if (!e.alive || e.isBoss)
+                    continue;
+
+                if (!CheckCollisionRecs(pr, e.getBounds()))
+                    continue;
+
+                // 3: контакт прерывает создание бомбы (бомба не ставится, Power не возвращается)
+                m_player.cancelMakeBomb();
+
+                // прерывание близости: девушка потрачена в любом случае
+                if (m_intimacy.active)
+                    endIntimacy();
+
+                // урон: -10 HP (одно деление шкалы), i-frames 1 c
+                damagePlayer(10);
+
+                // 2: анимация получения урона игроком (PlayerUndoAttack)
+                if (!m_player.isOnLadderNow())
+                    m_player.startHurt();
+
+                // 1: анимация атаки врага (Enemy1Attack/Enemy2Attack) в сторону игрока
+                if (!e.isOnLadder(m_map))
+                    e.startAttack(m_player.getPixelPos().x >= e.getPixelPos().x);
+
+                break; // один контакт за кадр
+            }
+        }
     }
 
     void Game::startIntimacy(int idx)
@@ -203,7 +268,6 @@ namespace vovochka
         m_intimacy.girlIdx = idx;
         m_intimacy.powerStart = static_cast<float>(m_stats.power);
 
-        // девушка -> Girl1Action1 на время близости
         auto &g = m_entities[idx];
         if (const SpriteSheetGPU *act = m_renderer.sheet("Girl1Action1"))
         {
@@ -212,10 +276,13 @@ namespace vovochka
             g.anim.frameTime = 0.08f;
         }
 
-        // два параллельных звука; длительность = более долгий (фолбэк 3.326)
         m_intimacy.duration = std::max({m_intimacy.duration,
                                         soundDuration("KISS"),
                                         soundDuration("GirlScream")});
+
+        m_intimacy.duration *= m_stats.power;
+        m_intimacy.duration /= m_stats.powerMax;
+
         playSound("GirlScream");
         playSound("KISS");
     }
@@ -230,11 +297,32 @@ namespace vovochka
             g.anim.setBlock(SpriteLayout::girlWait(false, wait->frameCount));
         }
 
+        stopSound("GirlScream");
+        stopSound("KISS");
+
         m_intimacy.active = false;
     }
 
     void Game::updateGameplay(float dt)
     {
+        const float tw = static_cast<float>(m_renderer.tileW());
+        const float th = static_cast<float>(m_renderer.tileH());
+        Rectangle pr = m_player.getBounds();
+
+        // --- бомба: Пробел, стоит BombCost Power, в ТАЙЛЕ игрока ---
+        if (!m_intimacy.active &&
+            m_deathTimer <= 0.0f &&
+            IsKeyPressed(KEY_SPACE) &&
+            !m_player.isMakingBomb() &&
+            !m_player.isHurt() &&
+            m_player.canPlaceBomb(m_map) &&
+            m_stats.power >= m_diff.bombCost)
+        {
+            m_stats.power -= m_diff.bombCost;
+            m_player.startMakeBomb(m_map);
+            playSound("Breath");
+        }
+
         // --- близость: слив Power, рост Score 1:2 ---
         if (m_intimacy.active)
         {
@@ -245,8 +333,6 @@ namespace vovochka
             if (k >= 1.0f)
                 endIntimacy();
         }
-
-        Rectangle pr = m_player.getBounds();
 
         // --- подбор презервативов: +1 Power, декремент стека ---
         if (!m_intimacy.active)
@@ -260,6 +346,9 @@ namespace vovochka
                 if (m_stats.power < m_stats.powerMax && CheckCollisionRecs(pr, cr))
                 {
                     ++m_stats.power;
+                    playSound("TakeCondom");
+                    if (m_stats.power >= m_stats.powerMax)
+                        playSound("FullStrength");
                     if (--it->count <= 0)
                         it = m_condoms.erase(it);
                     else
@@ -271,6 +360,7 @@ namespace vovochka
         }
 
         // --- девушки: попытка близости ---
+        constexpr float kGirlTriggerMargin = 8.0f; // срабатывать чуть раньше границы (тюнинг)
         m_laughTimer = std::max(0.0f, m_laughTimer - dt);
         if (!m_intimacy.active)
         {
@@ -280,16 +370,22 @@ namespace vovochka
                 if (g.type != MapObjectType::Girl || g.consumed)
                     continue;
 
-                Rectangle gr{g.x, g.baseY, (float)g.anim.sheet->patternW, (float)g.anim.sheet->patternH};
+                // прямоугольник ТАЙЛА спавна девушки, а не её спрайта
+                Rectangle gr{g.tileX * tw - kGirlTriggerMargin,
+                             g.tileY * th - kGirlTriggerMargin,
+                             tw + 2.0f * kGirlTriggerMargin,
+                             th + 2.0f * kGirlTriggerMargin};
 
                 if (!CheckCollisionRecs(pr, gr))
                     continue;
 
-                if (m_stats.power >= m_diff.playerStrengthCan)
+                if (m_stats.power >= m_diff.playerStrengthCan &&
+                    !m_player.isHurt())
                 {
-                    startIntimacy((int)i);
+                    startIntimacy(static_cast<int>(i));
                     break;
                 }
+
                 if (m_laughTimer <= 0.0f)
                 {
                     m_laughTimer = 4.0f;
@@ -366,7 +462,10 @@ namespace vovochka
         if (!m_intimacy.active && playerBehind)
             m_player.draw();
 
-        // --- 7. Враги (появятся со спавнером) ---
+        // --- 7. Враги ---
+        for (const auto &e : m_enemies)
+            if (e.isBehindFrontLayer())
+                e.draw();
 
         // --- 8. Фронт-слой: земля поверх стыков лестница×земля ---
         m_renderer.drawFrontLayer(m_map);
@@ -375,12 +474,61 @@ namespace vovochka
         if (!m_intimacy.active && !playerBehind)
             m_player.draw();
 
+        // --- 10. Враги (идет мимо лестницы) ---
+        for (const auto &e : m_enemies)
+            if (!e.isBehindFrontLayer())
+                e.draw();
+
         if (m_debugGrid)
         {
             for (int x = 0; x <= m_map.width; ++x)
                 DrawLineV({x * tw, 0}, {x * tw, mapH}, ColorAlpha(WHITE, 0.15f));
             for (int y = 0; y <= m_map.height; ++y)
                 DrawLineV({0, y * th}, {mapW, y * th}, ColorAlpha(WHITE, 0.15f));
+        }
+
+        // --- бомбы ---
+        if (const SpriteSheetGPU *bs = m_renderer.sheet("Bomb"))
+        {
+            for (const auto &b : m_bombs)
+            {
+                if (b.exploding)
+                    continue;
+
+                // один проход за время фуза: последний кадр — прямо перед взрывом
+                const int frame = std::min(
+                    static_cast<int>((b.t / b.fuse) * bs->frameCount),
+                    bs->frameCount - 1);
+
+                Rectangle src = bs->frame(frame);
+                Rectangle dst{b.x, b.y,
+                              static_cast<float>(bs->patternW),
+                              static_cast<float>(bs->patternH)};
+                DrawTexturePro(bs->texture, src, dst, {0, 0}, 0.0f, WHITE);
+            }
+        }
+
+        // --- взрыв: аддитив — чёрный фон не рисуется, огонь «светится» ---
+        if (const SpriteSheetGPU *es = m_renderer.sheet("Explosion"))
+        {
+            BeginBlendMode(BLEND_ADDITIVE);
+            for (const auto &b : m_bombs)
+            {
+                if (!b.exploding)
+                    continue;
+
+                const int frame = std::min(
+                    static_cast<int>(b.explodeT / kExplosionFrameTime),
+                    es->frameCount - 1);
+
+                Rectangle src = es->frame(frame);
+                Rectangle dst{b.tileX * tw + (tw - es->patternW) * 0.5f,
+                              b.tileY * th + (th - es->patternH) * 0.5f + kExplosionDy,
+                              static_cast<float>(es->patternW),
+                              static_cast<float>(es->patternH)};
+                DrawTexturePro(es->texture, src, dst, {0, 0}, 0.0f, WHITE);
+            }
+            EndBlendMode();
         }
 
         EndMode2D();
@@ -510,6 +658,178 @@ namespace vovochka
                  static_cast<int>(m_condoms.size()));
     }
 
+    void Game::spawnEnemies()
+    {
+        m_enemies.clear();
+        if (m_freePoints.empty())
+            return;
+
+        const float tw = static_cast<float>(m_renderer.tileW());
+        const float th = static_cast<float>(m_renderer.tileH());
+        constexpr float kSpeedScale = 4800.0f;
+
+        auto rndPoint = [&]() -> std::pair<int, int>
+        {
+            const size_t n = m_freePoints.size();
+            return m_freePoints[(n > 4) ? (static_cast<size_t>(rand()) % (n - 4)) + 5
+                                        : static_cast<size_t>(rand()) % n];
+        };
+
+        int m_nextEnemyId = 0;
+        for (int i = 0; i < m_diff.enemyCountMax; ++i)
+        {
+            auto p = rndPoint();
+            Enemy e;
+            e.init(m_map,
+                   m_renderer.sheet("Enemy1Go"),
+                   m_renderer.sheet("Enemy1Attack"),
+                   p.first, p.second, m_diff.enemySpeed * kSpeedScale, false, tw, th);
+            e.id = m_nextEnemyId++;
+            m_enemies.push_back(std::move(e));
+        }
+
+        /*if (const SpriteSheetGPU *bs = m_renderer.sheet("EnemyGirlGo"))
+        {
+            auto p = rndPoint();
+            Enemy b;
+            b.init(m_map,
+                   bs,
+                   p.first, p.second, m_diff.enemyGirlSpeed * kSpeedScale, true, tw, th);
+            m_enemies.push_back(std::move(b));
+        }
+        else
+        {
+            TraceLog(LOG_WARNING, "No EnemyGirlGo sheet — boss not spawned");
+        }*/
+    }
+
+    void Game::spawnBombAtPlayer()
+    {
+        const int tx = m_player.getTileX();
+        const int ty = m_player.getTileY();
+        const float tw = static_cast<float>(m_renderer.tileW());
+        const float th = static_cast<float>(m_renderer.tileH());
+        const SpriteSheetGPU *bs = m_renderer.sheet("Bomb");
+        const float cw = bs ? static_cast<float>(bs->patternW) : 32.0f;
+        const float ch = bs ? static_cast<float>(bs->patternH) : 32.0f;
+
+        Bomb b;
+        b.tileX = tx;
+        b.tileY = ty;
+        b.x = tx * tw + (tw - cw) * 0.5f;
+        b.y = ty * th + th * 0.5f - ch;
+        b.fuse = kBombFuse;
+        m_bombs.push_back(b);
+    }
+
+    void Game::updateBombs(float dt)
+    {
+        const SpriteSheetGPU *es = m_renderer.sheet("Explosion");
+        const float tw = static_cast<float>(m_renderer.tileW());
+        const float th = static_cast<float>(m_renderer.tileH());
+
+        for (auto it = m_bombs.begin(); it != m_bombs.end();)
+        {
+            auto &b = *it;
+            if (!b.exploding)
+            {
+                b.t += dt;
+                if (b.t >= b.fuse)
+                {
+                    b.exploding = true;
+                    b.explodeT = 0.0f;
+                    b.explodeDuration = es ? es->frameCount * kExplosionFrameTime : 0.5f;
+                    playSound("Explosion");
+                }
+            }
+            else
+            {
+                Rectangle exRect{b.tileX * tw, b.tileY * th, tw, th};
+                if (es)
+                {
+                    exRect = Rectangle{b.tileX * tw + (tw - es->patternW) * 0.5f,
+                                       b.tileY * th + (th - es->patternH) * 0.5f + kExplosionDy,
+                                       static_cast<float>(es->patternW),
+                                       static_cast<float>(es->patternH)};
+                }
+
+                explosionDamage(b, exRect);
+
+                b.explodeT += dt;
+                if (b.explodeT >= b.explodeDuration)
+                {
+                    it = m_bombs.erase(it); // взрыв доиграл — бомба удаляется
+                    continue;
+                }
+            }
+            ++it;
+        }
+    }
+
+    void Game::explosionDamage(Bomb &b, const Rectangle &exRect)
+    {
+        // игрок: в тайле взрыва в любой момент анимации — фатально, один раз
+        if (!b.playerHit &&
+            CheckCollisionRecs(exRect, m_player.getBounds()))
+        {
+            b.playerHit = true;
+            killPlayer();
+        }
+
+        // враги: разово каждому (id в hitEnemyIds)
+        for (auto &e : m_enemies)
+        {
+            if (!e.alive)
+                continue;
+            if (std::find(b.hitEnemyIds.begin(), b.hitEnemyIds.end(), e.id) != b.hitEnemyIds.end())
+                continue;
+            if (!CheckCollisionRecs(exRect, e.getBounds()))
+                continue;
+
+            b.hitEnemyIds.push_back(e.id);
+
+            if (e.isBoss)
+            {
+                // босс держит 4 взрыва
+                if (++e.bombHits >= 4)
+                {
+                    e.alive = false;
+                    m_stats.score = std::min(100.0f, m_stats.score + 12.0f);
+                }
+            }
+            else
+            {
+                e.alive = false; // обычный умирает с одного
+                m_stats.score = std::min(100.0f, m_stats.score + 2.0f);
+            }
+        }
+
+        m_enemies.erase(std::remove_if(m_enemies.begin(), m_enemies.end(),
+                                       [](const Enemy &e)
+                                       { return !e.alive; }),
+                        m_enemies.end());
+    }
+
+    void Game::damagePlayer(int dmg)
+    {
+        if (m_hurtTimer > 0.0f)
+            return;
+        m_hurtTimer = 1.0f;
+        m_stats.health -= dmg;
+        if (m_stats.health <= 0)
+        {
+            m_stats.health = 0;
+            killPlayer();
+        }
+    }
+
+    void Game::killPlayer()
+    {
+        m_stats.health = 0;
+        playSound("Scream");
+        m_deathTimer = 1.0f;
+    }
+
     void Game::loadSounds()
     {
         unloadSounds();
@@ -556,6 +876,13 @@ namespace vovochka
             PlaySound(it->second);
         else
             TraceLog(LOG_WARNING, "Sound not found: %s", name);
+    }
+
+    void Game::stopSound(const char *name)
+    {
+        auto it = m_sounds.find(toLower(name));
+        if (it != m_sounds.end())
+            StopSound(it->second);
     }
 
     float Game::soundDuration(const char *name) const

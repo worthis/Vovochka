@@ -12,6 +12,8 @@ namespace vovochka
         void init(const LevelMap &map,
                   const SpriteSheetGPU *standSheet,
                   const SpriteSheetGPU *walkSheet,
+                  const SpriteSheetGPU *makeBombSheet,
+                  const SpriteSheetGPU *hurtSheet,
                   float tileW, float tileH);
         void setInputEnabled(bool b) { m_inputEnabled = b; }
         void update(float dt, const LevelMap &map);
@@ -19,8 +21,16 @@ namespace vovochka
 
         bool isClimbing() const;
         bool isFrozenClimb() const { return m_frozenClimb; }
+        bool isOnLadderNow() const { return m_onLadder; }
         bool isBehindFrontLayer() const { return isClimbing() || m_frozenClimb; }
         void placeAt(const LevelMap &map, int tileX, int tileY);
+        bool canPlaceBomb(const LevelMap &map) const;
+        void startMakeBomb(const LevelMap &map);
+        void cancelMakeBomb();
+        bool isMakingBomb() const { return m_makingBomb || m_wantMakeBomb; }
+        bool takeMakeBombFinished();
+        void startHurt();
+        bool isHurt() const { return m_hurt; }
 
         Vector2 getPixelPos() const { return m_pos; }
         int getTileX() const { return m_tileX; }
@@ -51,6 +61,21 @@ namespace vovochka
 
         SpriteLayout::WalkAnim m_currentWalkAnim = SpriteLayout::WalkAnim::Right;
 
+        Animation m_animBomb;
+        bool m_makingBomb = false;
+        float m_makeBombT = 0.0f;
+        float m_makeBombDuration = 0.0f;
+        bool m_makeBombPending = false;
+        bool m_makeBombFinishedFlag = false;
+        bool m_wantMakeBomb = false;
+
+        Animation m_animHurt;
+        bool m_hurt = false;
+        float m_hurtT = 0.0f;
+        float m_hurtDuration = 0.0f;
+
+        void stepSnap(float dt, const LevelMap &map);
+
         int patW() const;
         int patH() const;
         float surfaceYForTile(int tileY) const;
@@ -61,7 +86,7 @@ namespace vovochka
         bool canOccupy(int x, int y, const LevelMap &map) const;
         bool canPassThrough(int fx, int fy, int tx, int ty, const LevelMap &map) const;
         bool isFrozenClimbSpot(const LevelMap &map) const;
-
+        void beginBombAnim();
         void clampToMap(const LevelMap &map);
         void switchWalkAnim(int dirX, int dirY);
         void switchToStandAnim();
