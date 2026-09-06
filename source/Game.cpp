@@ -88,6 +88,7 @@ namespace vovochka
         m_exitActive = false;
         m_hurtTimer = 0.0f;
         m_deathTimer = 0.0f;
+        m_bossGrabCooldown = 0.0f;
         m_currentLevel = std::clamp(n, 1, 12);
 
         m_renderer.unload();
@@ -206,6 +207,8 @@ namespace vovochka
             }
         }
 
+        m_hurtTimer = std::max(0.0f, m_hurtTimer - dt);
+
         m_player.setInputEnabled(!m_intimacy.active &&
                                  !m_bossIntimacy.active &&
                                  m_deathTimer <= 0.0f);
@@ -221,13 +224,15 @@ namespace vovochka
         for (auto &e : m_entities)
             e.anim.update(dt);
 
-        m_hurtTimer = std::max(0.0f, m_hurtTimer - dt);
         for (auto &e : m_enemies)
         {
-            if (e.isBoss && !m_bossIntimacy.active)
+            if (e.isBoss &&
+                !m_bossIntimacy.active)
             {
                 // Босс охотится на игрока
-                e.setTarget(m_map, m_player.getTileX(), m_player.getTileY());
+                e.bossThink(dt, m_map,
+                            m_player.getTileX(), m_player.getTileY(),
+                            m_stats.power, m_diff.playerStrengthCan);
             }
             e.update(dt, m_map);
         }
@@ -257,16 +262,19 @@ namespace vovochka
                 if (m_intimacy.active)
                     endIntimacy();
 
-                // урон: -10 HP (одно деление шкалы), i-frames 1 c
-                damagePlayer(10);
-
                 if (e.isBoss &&
+                    m_bossGrabCooldown <= 0.0f &&
+                    !e.isOnLadder(m_map) &&
+                    !m_player.isOnLadderNow() &&
                     m_stats.power > 0)
                 {
                     startBossIntimacy(static_cast<int>(i));
                 }
                 else
                 {
+                    // урон: -10 HP (одно деление шкалы), i-frames 1 c
+                    damagePlayer(10);
+
                     // анимация получения урона игроком
                     if (!m_player.isOnLadderNow())
                         m_player.startHurt();
@@ -277,7 +285,8 @@ namespace vovochka
                         e.startAttack(m_player.getPixelPos().x >= e.getPixelPos().x);
                 }
 
-                break; // один контакт за кадр
+                // один контакт за кадр
+                break;
             }
         }
     }
@@ -341,20 +350,20 @@ namespace vovochka
         m_bossIntimacy.duration *= m_stats.power;
         m_bossIntimacy.duration /= m_stats.powerMax;
 
-        // Звуки: те же что и с девушками (или другие?)
-        // playSound("GirlScream");
-        // playSound("KISS");
+        playSound("attak");
     }
 
     void Game::endBossIntimacy()
     {
         m_bossIntimacy.active = false;
-        auto& b = m_enemies[m_bossIntimacy.girlIdx];
+        m_bossGrabCooldown = kBossGrabCooldown;
+        auto &b = m_enemies[m_bossIntimacy.girlIdx];
         b.stopAttack();
 
-        // Босс возвращается в охоту
-        // stopSound("GirlScream");
-        // stopSound("KISS");
+        // урон: -10 HP (одно деление шкалы)
+        damagePlayer(10);
+
+        playSound("PlayerCackle");
     }
 
     void Game::updateGameplay(float dt)
@@ -362,6 +371,8 @@ namespace vovochka
         const float tw = static_cast<float>(m_renderer.tileW());
         const float th = static_cast<float>(m_renderer.tileH());
         Rectangle pr = m_player.getBounds();
+
+        m_bossGrabCooldown = std::max(0.0f, m_bossGrabCooldown - dt);
 
         // --- бомба: Пробел, стоит BombCost Power, в ТАЙЛЕ игрока ---
         if (!m_intimacy.active &&
@@ -395,7 +406,7 @@ namespace vovochka
             m_bossIntimacy.t += dt;
             const float k = std::min(1.0f, m_bossIntimacy.t / m_bossIntimacy.duration);
             m_stats.power = (int)std::ceil(m_bossIntimacy.powerStart * (1.0f - k));
-            m_stats.score = std::max(0.0f, m_stats.score - 2.0f * m_intimacy.powerStart * dt / m_intimacy.duration);
+            m_stats.score = std::max(0.0f, m_stats.score - 2.0f * m_bossIntimacy.powerStart * dt / m_bossIntimacy.duration);
             if (k >= 1.0f)
                 endBossIntimacy();
         }

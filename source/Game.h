@@ -91,7 +91,8 @@ namespace vovochka
         bool m_debugGrid = false;
         bool m_running = false;
         float m_deathTimer = 0.0f;
-        float m_hurtTimer = 0.0f; // i-frames после урона
+        float m_hurtTimer = 0.0f;        // i-frames после урона
+        float m_bossGrabCooldown = 0.0f; // кулдаун до повторного захвата
 
         std::vector<Bomb> m_bombs;
 
@@ -99,6 +100,7 @@ namespace vovochka
         static constexpr float kExplosionFrameTime = 0.05f; // время анимации взрыва
         static constexpr float kExplosionDy = -70.0f;       // положение анимации взрыва по оси Y
         static constexpr float kParallaxFactor = 0.3f;      // Параллакс фона: 0 = неподвижен, 1 = вместе с камерой
+        static constexpr float kBossGrabCooldown = 1.5f;    // кулдаун захвата 1500 мс
 
         void buildFreePoints();
         void spawnCondoms();
