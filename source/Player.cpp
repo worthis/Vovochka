@@ -114,7 +114,7 @@ namespace vovochka
         }
     }
 
-    void Player::update(float dt, const LevelMap &map)
+    void Player::update(float dt, const LevelMap &map, int inX, int inY, bool wantBomb)
     {
         const int pw = patW();
 
@@ -169,18 +169,58 @@ namespace vovochka
             return;
         }
 
-        // --- Ввод ---
-        int inX = 0, inY = 0;
-        if (m_inputEnabled)
+        // --- сигнал на бомбу извне ---
+        if (wantBomb && m_inputEnabled)
         {
-            if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A))
-                inX = -1;
-            if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D))
-                inX = +1;
-            if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W))
-                inY = -1;
-            if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S))
-                inY = +1;
+            m_dirX = m_dirY = 0;
+            m_xLocked = false;
+
+            // стоим на центре (или направления нет) — анимация сразу
+            if (isOnTileCenter() || (m_lastDirX == 0 && m_lastDirY == 0))
+            {
+                beginBombAnim();
+                clampToMap(map);
+                return;
+            }
+
+            const float centerX = m_pos.x + patW() * 0.5f;
+            const float colC = m_tileX * m_tileW + m_tileW * 0.5f;
+            const float feet = m_pos.y + patH();
+            const float rowC = surfaceYForTile(m_tileY);
+
+            // ближайший центр тайла ВПЕРЕД по последнему направлению
+            int tx = m_tileX, ty = m_tileY;
+            if (m_lastDirX > 0)
+                tx = (centerX <= colC) ? m_tileX : m_tileX + 1;
+            if (m_lastDirX < 0)
+                tx = (centerX >= colC) ? m_tileX : m_tileX - 1;
+            if (m_lastDirY > 0)
+                ty = (feet <= rowC) ? m_tileY : m_tileY + 1;
+            if (m_lastDirY < 0)
+                ty = (feet >= rowC) ? m_tileY : m_tileY - 1;
+
+            // вперёд закрыто — НЕ откатываемся: бомба на месте
+            if ((tx != m_tileX || ty != m_tileY) &&
+                !canPassThrough(m_tileX, m_tileY, tx, ty, map))
+            {
+                beginBombAnim();
+                clampToMap(map);
+                return;
+            }
+
+            // идём вперёд с ходьбой, анимация бомбы — после прибытия
+            m_wantMakeBomb = true;
+            m_snapping = true;
+            m_snapTargetX = tx;
+            m_snapTargetY = ty;
+            clampToMap(map);
+            return;
+        }
+
+        if (!m_inputEnabled)
+        {
+            inX = 0;
+            inY = 0;
         }
 
         const TileKind here = map.kindAt(m_tileX, m_tileY);
@@ -543,52 +583,6 @@ namespace vovochka
         return false; // на лестнице нельзя
     }
 
-    void Player::startMakeBomb(const LevelMap &map)
-    {
-        if (m_makingBomb || m_wantMakeBomb)
-            return;
-
-        m_dirX = m_dirY = 0;
-        m_xLocked = false;
-
-        // стоим на центре (или направления нет) — анимация сразу
-        if (isOnTileCenter() || (m_lastDirX == 0 && m_lastDirY == 0))
-        {
-            beginBombAnim();
-            return;
-        }
-
-        const float centerX = m_pos.x + patW() * 0.5f;
-        const float colC = m_tileX * m_tileW + m_tileW * 0.5f;
-        const float feet = m_pos.y + patH();
-        const float rowC = surfaceYForTile(m_tileY);
-
-        // ближайший центр тайла ВПЕРЕЁД по последнему направлению
-        int tx = m_tileX, ty = m_tileY;
-        if (m_lastDirX > 0)
-            tx = (centerX <= colC) ? m_tileX : m_tileX + 1;
-        if (m_lastDirX < 0)
-            tx = (centerX >= colC) ? m_tileX : m_tileX - 1;
-        if (m_lastDirY > 0)
-            ty = (feet <= rowC) ? m_tileY : m_tileY + 1;
-        if (m_lastDirY < 0)
-            ty = (feet >= rowC) ? m_tileY : m_tileY - 1;
-
-        // вперёд закрыто — НЕ откатываемся: бомба на месте
-        if ((tx != m_tileX || ty != m_tileY) &&
-            !canPassThrough(m_tileX, m_tileY, tx, ty, map))
-        {
-            beginBombAnim();
-            return;
-        }
-
-        // идём вперёд с ходьбой, анимация бомбы — после прибытия
-        m_wantMakeBomb = true;
-        m_snapping = true;
-        m_snapTargetX = tx;
-        m_snapTargetY = ty;
-    }
-
     void Player::beginBombAnim()
     {
         if (!m_animBomb.sheet || m_animBomb.sheet->frameCount < 2)
@@ -612,7 +606,7 @@ namespace vovochka
         m_makeBombPending = false;
     }
 
-    bool Player::takeMakeBombFinished()
+    bool Player::popMakeBombFinished()
     {
         const bool f = m_makeBombFinishedFlag;
         m_makeBombFinishedFlag = false;

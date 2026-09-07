@@ -16,7 +16,7 @@ namespace vovochka
                   const SpriteSheetGPU *hurtSheet,
                   float tileW, float tileH, float speedPx);
         void setInputEnabled(bool b) { m_inputEnabled = b; }
-        void update(float dt, const LevelMap &map);
+        void update(float dt, const LevelMap &map, int inX, int inY, bool wantBomb);
         void draw() const;
 
         bool isClimbing() const;
@@ -25,10 +25,9 @@ namespace vovochka
         bool isBehindFrontLayer() const { return isClimbing() || m_frozenClimb; }
         void placeAt(const LevelMap &map, int tileX, int tileY);
         bool canPlaceBomb(const LevelMap &map) const;
-        void startMakeBomb(const LevelMap &map);
         void cancelMakeBomb();
         bool isMakingBomb() const { return m_makingBomb || m_wantMakeBomb; }
-        bool takeMakeBombFinished();
+        bool popMakeBombFinished();
         void startHurt();
         bool isHurt() const { return m_hurt; }
 

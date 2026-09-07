@@ -5,6 +5,8 @@
 #include "Animation.h"
 #include "Player.h"
 #include "Enemy.h"
+#include "InputSystem.h"
+#include "ConfigSystem.h"
 #include "raylib.h"
 #include <unordered_map>
 
@@ -72,6 +74,7 @@ namespace vovochka
         std::string m_dataRoot;
         LevelLoader m_loader{m_dataRoot};
         LevelRenderer m_renderer;
+        InputSystem m_input;
         LevelMap m_map;
         Player m_player;
         Stats m_stats{};
@@ -95,7 +98,7 @@ namespace vovochka
         float m_bossGrabCooldown = 0.0f; // кулдаун до повторного захвата
 
         std::vector<Bomb> m_bombs;
-        
+
         static constexpr float kSpeedScale = 1800.0f;
         static constexpr float kBombFuse = 2.0f;            // время фитиля бомбы
         static constexpr float kExplosionFrameTime = 0.05f; // время анимации взрыва
@@ -108,8 +111,13 @@ namespace vovochka
         void spawnBombAtPlayer();
         void spawnEnemies();
 
-        void updateGameplay(float dt);
+        void update(float dt);         // системный уровень: ввод, игрок, камера
+        void updateGameplay(float dt); // игровая логика: предметы, враги, бомбы, близость
+        void processSystemInput();     // отладка, смена уровня/сложности
+        bool checkBombConditions();    // проверка условий создания бомбы
         void updateBombs(float dt);
+        void updateCamera();
+        void render();
 
         void explosionDamage(Bomb &b, const Rectangle &exRect);
         void damagePlayer(int dmg);
@@ -119,11 +127,6 @@ namespace vovochka
         void endIntimacy();
         void startBossIntimacy(int bossIdx);
         void endBossIntimacy();
-
-        void processInput();
-        void update(float dt);
-        void updateCamera();
-        void render();
 
         void loadSounds();
         void unloadSounds();

@@ -1,5 +1,7 @@
 #include "Game.h"
 #include "SpriteLayout.h"
+#include "InputSystem.h"
+#include "ConfigSystem.h"
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -47,6 +49,8 @@ namespace vovochka
 
     bool Game::init(int screenW, int screenH, const char *title)
     {
+        ConfigSystem::instance().loadSettings("settings.json");
+
         SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
         InitWindow(screenW, screenH, title);
         InitAudioDevice();
@@ -175,28 +179,53 @@ namespace vovochka
         m_camera.target = {tx, ty};
     }
 
-    void Game::processInput()
+    void Game::processSystemInput()
     {
-        if (IsKeyPressed(KEY_ESCAPE))
+        // Пауза/выход
+        if (m_input.isPausePressed())
+        {
             m_running = false;
+            return;
+        }
+
+        // Отладочные клавиши (оставляем прямыми, это не основное управление)
         if (IsKeyPressed(KEY_G))
             m_debugGrid = !m_debugGrid;
+
         if (IsKeyPressed(KEY_E))
             setLevel(m_currentLevel + 1);
+
         if (IsKeyPressed(KEY_Q))
             setLevel(m_currentLevel - 1);
 
-        for (int d = 1; d <= 3; ++d)
-            if (IsKeyPressed(static_cast<KeyboardKey>(KEY_ONE + d - 1)))
-            {
-                m_difficulty = d;
-                setLevel(m_currentLevel);
-            }
+        if (IsKeyPressed(KEY_ONE))
+        {
+            m_difficulty = 1;
+            setLevel(m_currentLevel);
+        }
+
+        if (IsKeyPressed(KEY_TWO))
+        {
+            m_difficulty = 2;
+            setLevel(m_currentLevel);
+        }
+
+        if (IsKeyPressed(KEY_THREE))
+        {
+            m_difficulty = 3;
+            setLevel(m_currentLevel);
+        }
     }
 
     void Game::update(float dt)
     {
-        // гибель игрока: пауза и рестарт уровня
+        // Сбор ввода
+        m_input.update();
+
+        // Системный ввод (отладка, смена уровня)
+        processSystemInput();
+
+        // Гибель игрока: пауза и рестарт уровня
         if (m_deathTimer > 0.0f)
         {
             m_deathTimer -= dt;
@@ -207,91 +236,21 @@ namespace vovochka
             }
         }
 
-        m_hurtTimer = std::max(0.0f, m_hurtTimer - dt);
+        // Проверка условий создания бомбы
+        bool wantBomb = checkBombConditions();
 
-        m_player.setInputEnabled(!m_intimacy.active &&
-                                 !m_bossIntimacy.active &&
-                                 m_deathTimer <= 0.0f);
-        m_player.update(dt, m_map);
+        // Обновление игрока с вводом
+        m_player.setInputEnabled(!m_intimacy.active && !m_bossIntimacy.active && m_deathTimer <= 0.0f);
+        m_player.update(dt, m_map, m_input.getMoveX(), m_input.getMoveY(), wantBomb);
 
-        if (m_player.takeMakeBombFinished())
+        if (m_player.popMakeBombFinished())
             spawnBombAtPlayer();
 
+        // Камера
         updateCamera();
+
+        // Геймплей
         updateGameplay(dt);
-        updateBombs(dt);
-
-        for (auto &e : m_entities)
-            e.anim.update(dt);
-
-        for (auto &e : m_enemies)
-        {
-            if (e.isBoss &&
-                !m_bossIntimacy.active)
-            {
-                // Босс охотится на игрока
-                e.bossThink(dt, m_map,
-                            m_player.getTileX(), m_player.getTileY(),
-                            m_stats.power, m_diff.playerStrengthCan);
-            }
-            e.update(dt, m_map);
-        }
-
-        // контакт враг-игрок: атака, урон, прерывания
-        if (m_deathTimer <= 0.0f &&
-            m_hurtTimer <= 0.0f &&
-            !m_bossIntimacy.active &&
-            !m_player.isHurt())
-        {
-            Rectangle pr = m_player.getBounds();
-
-            for (size_t i = 0; i < m_enemies.size(); ++i)
-            {
-                auto &e = m_enemies[i];
-
-                if (!e.alive)
-                    continue;
-
-                // if (!CheckCollisionRecs(pr, e.getBounds()))
-                //    continue;
-
-                if (e.getTileX() != m_player.getTileX() ||
-                    e.getTileY() != m_player.getTileY())
-                    continue;
-
-                // прерывание создания бомбы
-                m_player.cancelMakeBomb();
-
-                // прерывание близости
-                if (m_intimacy.active)
-                    endIntimacy();
-
-                if (e.isBoss &&
-                    m_bossGrabCooldown <= 0.0f &&
-                    !e.isOnLadder(m_map) &&
-                    !m_player.isOnLadderNow() &&
-                    m_stats.power > 0)
-                {
-                    startBossIntimacy(static_cast<int>(i));
-                }
-                else
-                {
-                    damagePlayer(e.isBoss && m_player.isOnLadderNow() ? 2 : 1);
-
-                    // анимация получения урона игроком
-                    if (!m_player.isOnLadderNow())
-                        m_player.startHurt();
-
-                    // анимация атаки врага в сторону игрока
-                    if (!e.isBoss &&
-                        !e.isOnLadder(m_map))
-                        e.startAttack(m_player.getPixelPos().x >= e.getPixelPos().x);
-                }
-
-                // один контакт за кадр
-                break;
-            }
-        }
     }
 
     void Game::startIntimacy(int idx)
@@ -344,8 +303,7 @@ namespace vovochka
         m_bossIntimacy.powerStart = static_cast<float>(m_stats.power);
 
         auto &b = m_enemies[idx];
-        // Vector2 pp = m_player.getPixelPos();
-        // b.setPixelPos(pp.x, pp.y);
+        b.setTile(m_player.getTileX(), m_player.getTileY());
         b.startAttack(m_player.getPixelPos().x >= b.getPixelPos().x, true);
 
         // Длительность пропорциональна Power (как с девушками)
@@ -370,30 +328,41 @@ namespace vovochka
         playSound("PlayerCackle");
     }
 
+    bool Game::checkBombConditions()
+    {
+        if (!m_input.isBombPressed())
+            return false;
+
+        if (m_intimacy.active ||
+            m_bossIntimacy.active)
+            return false;
+
+        if (m_deathTimer > 0.0f)
+            return false;
+
+        if (m_player.isMakingBomb() ||
+            m_player.isHurt())
+            return false;
+
+        if (!m_player.canPlaceBomb(m_map))
+            return false;
+
+        if (m_stats.power < m_diff.bombCost)
+            return false;
+
+        m_stats.power -= m_diff.bombCost;
+        playSound("Breath");
+
+        return true;
+    }
+
     void Game::updateGameplay(float dt)
     {
         const float tw = static_cast<float>(m_renderer.tileW());
         const float th = static_cast<float>(m_renderer.tileH());
         Rectangle pr = m_player.getBounds();
 
-        m_bossGrabCooldown = std::max(0.0f, m_bossGrabCooldown - dt);
-
-        // --- бомба: Пробел, стоит BombCost Power, в ТАЙЛЕ игрока ---
-        if (!m_intimacy.active &&
-            !m_bossIntimacy.active &&
-            m_deathTimer <= 0.0f &&
-            IsKeyPressed(KEY_SPACE) &&
-            !m_player.isMakingBomb() &&
-            !m_player.isHurt() &&
-            m_player.canPlaceBomb(m_map) &&
-            m_stats.power >= m_diff.bombCost)
-        {
-            m_stats.power -= m_diff.bombCost;
-            m_player.startMakeBomb(m_map);
-            playSound("Breath");
-        }
-
-        // --- близость: слив Power, рост Score 1:2 ---
+        // --- Близость с девушкой: слив Power, рост Score ---
         if (m_intimacy.active)
         {
             m_intimacy.t += dt;
@@ -404,7 +373,7 @@ namespace vovochka
                 endIntimacy();
         }
 
-        // "Близость с боссом": Power → Score (в отрицательную сторону)
+        // --- Близость с боссом: слив Power, падение Score ---
         if (m_bossIntimacy.active)
         {
             m_bossIntimacy.t += dt;
@@ -415,8 +384,9 @@ namespace vovochka
                 endBossIntimacy();
         }
 
-        // --- подбор презервативов: +1 Power, декремент стека ---
-        if (!m_intimacy.active)
+        // --- Подбор презервативов ---
+        if (!m_intimacy.active &&
+            !m_bossIntimacy.active)
         {
             const SpriteSheetGPU *cs = m_renderer.sheet("Condom");
             const float cw = cs ? (float)cs->patternW : 28.0f;
@@ -424,7 +394,8 @@ namespace vovochka
             for (auto it = m_condoms.begin(); it != m_condoms.end();)
             {
                 Rectangle cr{it->x, it->y, cw, ch};
-                if (m_stats.power < m_stats.powerMax && CheckCollisionRecs(pr, cr))
+                if (m_stats.power < m_stats.powerMax &&
+                    CheckCollisionRecs(pr, cr))
                 {
                     ++m_stats.power;
                     playSound("TakeCondom");
@@ -440,9 +411,13 @@ namespace vovochka
             }
         }
 
-        // --- девушки: попытка близости ---
-        constexpr float kGirlTriggerMargin = 8.0f; // срабатывать чуть раньше границы (тюнинг)
+        // --- Девушки: обновление
         m_laughTimer = std::max(0.0f, m_laughTimer - dt);
+        for (auto &e : m_entities)
+            e.anim.update(dt);
+
+        // --- Девушки: попытка близости ---
+        constexpr float kGirlTriggerMargin = 8.0f; // срабатывать чуть раньше границы
         if (!m_intimacy.active &&
             !m_bossIntimacy.active)
         {
@@ -476,8 +451,75 @@ namespace vovochka
             }
         }
 
-        // --- портал: активен при Score >= ScoreLevel ---
-        m_exitActive = m_stats.score >= (float)m_diff.scoreLevel;
+        // --- Враги: ИИ и коллизии ---
+        m_hurtTimer = std::max(0.0f, m_hurtTimer - dt);
+        m_bossGrabCooldown = std::max(0.0f, m_bossGrabCooldown - dt);
+
+        for (auto &e : m_enemies)
+        {
+            if (e.isBoss &&
+                !m_bossIntimacy.active)
+            {
+                e.bossThink(dt, m_map,
+                            m_player.getTileX(), m_player.getTileY(),
+                            m_stats.power, m_diff.playerStrengthCan);
+            }
+            e.update(dt, m_map);
+        }
+
+        // --- Контакт враг-игрок ---
+        if (m_deathTimer <= 0.0f &&
+            m_hurtTimer <= 0.0f &&
+            !m_bossIntimacy.active &&
+            !m_player.isHurt())
+        {
+            for (size_t i = 0; i < m_enemies.size(); ++i)
+            {
+                auto &e = m_enemies[i];
+                if (!e.alive)
+                    continue;
+
+                /*if (!CheckCollisionRecs(pr, e.getBounds()))
+                    continue;*/
+
+                if (e.getTileX() != m_player.getTileX() ||
+                    e.getTileY() != m_player.getTileY())
+                    continue;
+
+                m_player.cancelMakeBomb();
+
+                if (m_intimacy.active)
+                    endIntimacy();
+
+                if (e.isBoss &&
+                    m_bossGrabCooldown <= 0.0f &&
+                    m_stats.power > 0 &&
+                    !m_player.isOnLadderNow() &&
+                    !e.isOnLadder(m_map))
+                {
+                    startBossIntimacy(static_cast<int>(i));
+                }
+                else
+                {
+                    damagePlayer(e.isBoss && m_player.isOnLadderNow() ? 2 : 1);
+
+                    if (!m_player.isOnLadderNow())
+                        m_player.startHurt();
+
+                    if (!e.isBoss &&
+                        !e.isOnLadder(m_map))
+                        e.startAttack(m_player.getPixelPos().x >= e.getPixelPos().x);
+                }
+
+                break;
+            }
+        }
+
+        // --- Бомбы ---
+        updateBombs(dt);
+
+        // --- Портал ---
+        m_exitActive = m_stats.score >= static_cast<float>(m_diff.scoreLevel);
     }
 
     void Game::render()
@@ -633,7 +675,6 @@ namespace vovochka
         while (m_running && !WindowShouldClose())
         {
             const float dt = GetFrameTime();
-            processInput();
             update(dt);
             render();
         }

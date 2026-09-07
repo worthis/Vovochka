@@ -21,6 +21,11 @@ namespace vovochka
 
         int getTileX() const { return m_tileX; }
         int getTileY() const { return m_tileY; }
+        void setTile(int x, int y)
+        {
+            m_tileX = x;
+            m_tileY = y;
+        }
         Vector2 getPixelPos() const { return m_pos; }
         void setPixelPos(float x, float y)
         {
