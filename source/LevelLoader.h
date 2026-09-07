@@ -12,7 +12,7 @@ namespace vovochka
     {
         int scoreLevel = 35;
         int bombCost = 1;
-        int playerLifeMax = 80;
+        int playerLifeMax = 8;
         int enemyCountMax = 3;
         int condomCount = 88;
         int playerStrengthCan = 4;

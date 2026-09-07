@@ -22,6 +22,11 @@ namespace vovochka
         int getTileX() const { return m_tileX; }
         int getTileY() const { return m_tileY; }
         Vector2 getPixelPos() const { return m_pos; }
+        void setPixelPos(float x, float y)
+        {
+            m_pos.x = x;
+            m_pos.y = y;
+        }
         Rectangle getBounds() const;
 
         bool isBehindFrontLayer() const { return m_snapping && m_dirY != 0; }
@@ -53,7 +58,7 @@ namespace vovochka
         int m_tileX = 0, m_tileY = 0;
         float m_tileW = 80, m_tileH = 80;
         int m_dirX = 0, m_dirY = 0;
-        float m_speed = 37.5f;
+        float m_speed = 200.0f;
         bool m_snapping = false;
         int m_snapTargetX = 0, m_snapTargetY = 0;
 

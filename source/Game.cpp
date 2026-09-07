@@ -113,7 +113,7 @@ namespace vovochka
                       m_renderer.sheet("PlayerGo"),
                       m_renderer.sheet("PlayerMakeBomb"),
                       m_renderer.sheet("PlayerUndoAttack"),
-                      tw, th);
+                      tw, th, m_diff.playerSpeed * kSpeedScale);
 
         m_loader.loadDifficulty(m_difficulty, m_diff);
 
@@ -252,13 +252,17 @@ namespace vovochka
                 if (!e.alive)
                     continue;
 
-                if (!CheckCollisionRecs(pr, e.getBounds()))
+                // if (!CheckCollisionRecs(pr, e.getBounds()))
+                //    continue;
+
+                if (e.getTileX() != m_player.getTileX() ||
+                    e.getTileY() != m_player.getTileY())
                     continue;
 
-                // контакт прерывает создание бомбы (бомба не ставится, Power не возвращается)
+                // прерывание создания бомбы
                 m_player.cancelMakeBomb();
 
-                // прерывание близости: девушка потрачена в любом случае
+                // прерывание близости
                 if (m_intimacy.active)
                     endIntimacy();
 
@@ -272,8 +276,7 @@ namespace vovochka
                 }
                 else
                 {
-                    // урон: -10 HP (одно деление шкалы), i-frames 1 c
-                    damagePlayer(10);
+                    damagePlayer(e.isBoss && m_player.isOnLadderNow() ? 2 : 1);
 
                     // анимация получения урона игроком
                     if (!m_player.isOnLadderNow())
@@ -341,6 +344,8 @@ namespace vovochka
         m_bossIntimacy.powerStart = static_cast<float>(m_stats.power);
 
         auto &b = m_enemies[idx];
+        // Vector2 pp = m_player.getPixelPos();
+        // b.setPixelPos(pp.x, pp.y);
         b.startAttack(m_player.getPixelPos().x >= b.getPixelPos().x, true);
 
         // Длительность пропорциональна Power (как с девушками)
@@ -360,8 +365,7 @@ namespace vovochka
         auto &b = m_enemies[m_bossIntimacy.girlIdx];
         b.stopAttack();
 
-        // урон: -10 HP (одно деление шкалы)
-        damagePlayer(10);
+        damagePlayer(1);
 
         playSound("PlayerCackle");
     }
@@ -748,7 +752,6 @@ namespace vovochka
 
         const float tw = static_cast<float>(m_renderer.tileW());
         const float th = static_cast<float>(m_renderer.tileH());
-        constexpr float kSpeedScale = 4800.0f;
 
         auto rndPoint = [&]() -> std::pair<int, int>
         {
@@ -891,8 +894,7 @@ namespace vovochka
 
             if (e.isBoss)
             {
-                // босс держит 4 взрыва
-                if (++e.bombHits >= 4)
+                if (++e.bombHits >= m_diff.enemyGirlLifeMax)
                 {
                     e.alive = false;
                     m_stats.score = std::min(100.0f, m_stats.score + 12.0f);
@@ -900,7 +902,7 @@ namespace vovochka
             }
             else
             {
-                e.alive = false; // обычный умирает с одного
+                e.alive = false;
                 m_stats.score = std::min(100.0f, m_stats.score + 2.0f);
             }
         }

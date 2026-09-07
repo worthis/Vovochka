@@ -19,11 +19,12 @@ namespace vovochka
                       const SpriteSheetGPU *walkSheet,
                       const SpriteSheetGPU *makeBombSheet,
                       const SpriteSheetGPU *hurtSheet,
-                      float tileW, float tileH)
+                      float tileW, float tileH, float speedPx)
     {
         // --- полный сброс состояния (критично при смене уровня) ---
         m_dirX = m_dirY = 0;
         m_lastDirX = m_lastDirY = 0;
+        m_speed = speedPx;
         m_snapTargetX = m_snapTargetY = 0;
         m_snapping = false;
         m_xLocked = false;

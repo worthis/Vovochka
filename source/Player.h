@@ -14,7 +14,7 @@ namespace vovochka
                   const SpriteSheetGPU *walkSheet,
                   const SpriteSheetGPU *makeBombSheet,
                   const SpriteSheetGPU *hurtSheet,
-                  float tileW, float tileH);
+                  float tileW, float tileH, float speedPx);
         void setInputEnabled(bool b) { m_inputEnabled = b; }
         void update(float dt, const LevelMap &map);
         void draw() const;

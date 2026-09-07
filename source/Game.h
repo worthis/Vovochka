@@ -95,7 +95,8 @@ namespace vovochka
         float m_bossGrabCooldown = 0.0f; // кулдаун до повторного захвата
 
         std::vector<Bomb> m_bombs;
-
+        
+        static constexpr float kSpeedScale = 1800.0f;
         static constexpr float kBombFuse = 2.0f;            // время фитиля бомбы
         static constexpr float kExplosionFrameTime = 0.05f; // время анимации взрыва
         static constexpr float kExplosionDy = -70.0f;       // положение анимации взрыва по оси Y
