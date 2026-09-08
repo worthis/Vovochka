@@ -52,6 +52,19 @@ namespace vovochka
                           static_cast<float>(sheet->patternH)};
             DrawTexturePro(sheet->texture, src, dst, {0, 0}, 0.0f, WHITE);
         }
+
+        Rectangle getVisibleBounds() const
+        {
+            if (!sheet || sheet->visibleBounds.empty())
+                return Rectangle{0, 0, 0, 0};
+
+            int currentFrame = block.first + frame;
+            if (currentFrame < 0 ||
+                currentFrame >= static_cast<int>(sheet->visibleBounds.size()))
+                return Rectangle{0, 0, 0, 0};
+
+            return sheet->visibleBounds[currentFrame];
+        }
     };
 
 } // namespace vovochka

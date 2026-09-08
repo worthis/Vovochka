@@ -30,8 +30,8 @@ namespace vovochka
             Animation anim;
             MapObjectType type = MapObjectType::Unknown;
             float x = 0.0f, baseY = 0.0f;
-            int tileX = 0, tileY = 0; // точка спавна (для близости)
-            bool consumed = false;    // девушка потрачена
+            int tileX = 0, tileY = 0; // точка спавна
+            bool used = false;        // девушка потрачена
         };
 
         struct CondomStack

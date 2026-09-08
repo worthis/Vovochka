@@ -17,6 +17,8 @@ namespace vovochka
                   const SpriteSheetGPU *hurtSheet,
                   float tileW, float tileH, float speedPx);
 
+        Rectangle getBounds() const override;
+
         void setInputEnabled(bool b) { m_inputEnabled = b; }
         void update(float dt, const LevelMap &map, int inX, int inY, bool wantBomb);
         void draw() const;
@@ -52,6 +54,7 @@ namespace vovochka
         float m_hurtT = 0.0f;
         float m_hurtDuration = 0.0f;
 
+        Rectangle offsetBounds(const Animation &anim) const;
         void beginBombAnim();
         void switchWalkAnim(int dirX, int dirY);
         void switchToStandAnim();

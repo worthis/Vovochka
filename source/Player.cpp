@@ -66,6 +66,29 @@ namespace vovochka
     int Player::patW() const { return m_animWalk.sheet ? m_animWalk.sheet->patternW : 104; }
     int Player::patH() const { return m_animWalk.sheet ? m_animWalk.sheet->patternH : 104; }
 
+    Rectangle Player::getBounds() const
+    {
+        if (m_hurt)
+            return offsetBounds(m_animHurt);
+
+        if (m_makingBomb)
+            return offsetBounds(m_animBomb);
+
+        if (m_snapping ||
+            m_climbing ||
+            m_dirX != 0 ||
+            m_dirY != 0)
+            return offsetBounds(m_animWalk);
+
+        return offsetBounds(m_animStand);
+    }
+
+    Rectangle Player::offsetBounds(const Animation &anim) const
+    {
+        Rectangle vb = anim.getVisibleBounds();
+        return Rectangle{m_pos.x + vb.x, m_pos.y + vb.y, vb.width, vb.height};
+    }
+
     void Player::update(float dt, const LevelMap &map, int inX, int inY, bool wantBomb)
     {
         const int pw = patW();

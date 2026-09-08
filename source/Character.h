@@ -1,4 +1,5 @@
 #pragma once
+
 #include "MapData.h"
 #include "raylib.h"
 
@@ -15,7 +16,7 @@ namespace vovochka
         Vector2 getPixelPos() const { return m_pos; }
         int getTileX() const { return m_tileX; }
         int getTileY() const { return m_tileY; }
-        Rectangle getBounds() const;
+        virtual Rectangle getBounds() const;
         float getFeetY() const { return m_pos.y + patH(); }
 
         void placeAt(int tileX, int tileY);
@@ -47,7 +48,6 @@ namespace vovochka
         void updateClimbing(const LevelMap &map);
         void moveTowardsSnap(float dt, const LevelMap &map);
 
-        // Размеры спрайта — переопределяются наследниками
         virtual int patW() const = 0;
         virtual int patH() const = 0;
     };

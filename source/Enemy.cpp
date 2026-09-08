@@ -42,6 +42,22 @@ namespace vovochka
     int Enemy::patW() const { return m_animWalk.sheet ? m_animWalk.sheet->patternW : 104; }
     int Enemy::patH() const { return m_animWalk.sheet ? m_animWalk.sheet->patternH : 128; }
 
+    Rectangle Enemy::getBounds() const
+    {
+        if (m_attacking)
+            return offsetBounds(m_animAttack);
+        if (alive)
+            return offsetBounds(m_animWalk);
+            
+        return Rectangle{0, 0, 0, 0};
+    }
+
+    Rectangle Enemy::offsetBounds(const Animation &anim) const
+    {
+        Rectangle vb = anim.getVisibleBounds();
+        return Rectangle{m_pos.x + vb.x, m_pos.y + vb.y, vb.width, vb.height};
+    }
+
     void Enemy::update(float dt, const LevelMap &map)
     {
         if (!alive)

@@ -135,7 +135,7 @@ namespace vovochka
             e.type = o.type;
             e.tileX = o.x;
             e.tileY = o.y;
-            e.consumed = false;
+            e.used = false;
             e.anim.sheet = m_renderer.sheet("Girl1Wait");
             e.anim.setBlock(SpriteLayout::girlWait(true, e.anim.sheet ? e.anim.sheet->frameCount : 2));
             if (e.anim.sheet)
@@ -279,7 +279,7 @@ namespace vovochka
     void Game::endIntimacy()
     {
         auto &g = m_entities[m_intimacy.girlIdx];
-        g.consumed = true;
+        g.used = true;
         if (const SpriteSheetGPU *wait = m_renderer.sheet("Girl1Wait"))
         {
             g.anim.sheet = wait;
@@ -347,8 +347,6 @@ namespace vovochka
 
     void Game::updateGameplay(float dt)
     {
-        const float tw = static_cast<float>(m_renderer.tileW());
-        const float th = static_cast<float>(m_renderer.tileH());
         Rectangle pr = m_player.getBounds();
 
         // --- Близость с девушкой: слив Power, рост Score ---
@@ -406,21 +404,17 @@ namespace vovochka
             e.anim.update(dt);
 
         // --- Девушки: попытка близости ---
-        constexpr float kGirlTriggerMargin = 9.0f; // срабатывать чуть раньше границы
         if (!m_intimacy.active &&
             !m_bossIntimacy.active)
         {
             for (size_t i = 0; i < m_entities.size(); ++i)
             {
                 const auto &g = m_entities[i];
-                if (g.type != MapObjectType::Girl || g.consumed)
+                if (g.type != MapObjectType::Girl || g.used)
                     continue;
 
-                // прямоугольник ТАЙЛА спавна девушки, а не её спрайта
-                Rectangle gr{g.tileX * tw - kGirlTriggerMargin,
-                             g.tileY * th - kGirlTriggerMargin,
-                             tw + 2.0f * kGirlTriggerMargin,
-                             th + 2.0f * kGirlTriggerMargin};
+                Rectangle vb = g.anim.getVisibleBounds();
+                Rectangle gr{g.x + vb.x, g.baseY + vb.y, vb.width, vb.height};
 
                 if (!CheckCollisionRecs(pr, gr))
                     continue;

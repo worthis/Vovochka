@@ -5,14 +5,12 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-
 #include "raylib.h"
 
 namespace vovochka
 {
 
     // Описание одного спрайт-листа — секции [Name] в GameSprites.dat.
-    // Заполняется из INI, потом из поля `file` загружается картинка.
     struct SpriteSheetDef
     {
         std::string name; // имя секции, например "Set2", "PlayerGo", "Girl1Wait"
@@ -24,6 +22,7 @@ namespace vovochka
         int patternH = 0; // высота спрайта
         int skipW = 0;
         int skipH = 0;
+
         bool transparent = false;
         uint32_t transparentColor = 0x00FF00; // clLime
 
@@ -49,6 +48,8 @@ namespace vovochka
         int rows = 0;
         int frameCount = 0;
 
+        std::vector<Rectangle> visibleBounds;
+
         bool valid() const noexcept { return texture.id != 0; }
 
         Rectangle frame(int index) const noexcept
@@ -64,7 +65,7 @@ namespace vovochka
         }
     };
 
-    // Общий менеджер всех спрайт-листов (и тайлсетов [SetN], и одиночных спрайтов).
+    // Общий менеджер всех спрайт-листов (и тайлсетов, и одиночных спрайтов).
     class SpriteSheetManager
     {
     public:
@@ -79,18 +80,18 @@ namespace vovochka
         // Парсит INI и грузит все секции как спрайт-листы.
         // graphicsDir — папка, откуда берутся BMP/JPG по Picture=<file>.
         bool loadFromIni(const std::string &iniPath, const std::string &graphicsDir);
-
         void unload();
 
         const SpriteSheetGPU *get(const std::string &name) const;
         bool has(const std::string &name) const;
 
-        // Все имена загруженных листов (для debug).
+        // Все имена загруженных листов
         std::vector<std::string> names() const;
 
     private:
         std::unordered_map<std::string, SpriteSheetGPU> m_sheets;
         static Color unpackColor(uint32_t rgb);
+        static void computeVisibleBounds(SpriteSheetGPU& sheet, const Image& img);
     };
 
 } // namespace vovochka

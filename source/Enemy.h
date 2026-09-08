@@ -1,4 +1,5 @@
 #pragma once
+
 #include "Animation.h"
 #include "MapData.h"
 #include "SpriteLayout.h"
@@ -16,6 +17,8 @@ namespace vovochka
                   const SpriteSheetGPU *attackSheet,
                   int tileX, int tileY, float speedPx, bool boss,
                   float tileW, float tileH);
+
+        Rectangle getBounds() const override;
 
         void update(float dt, const LevelMap &map);
         void draw() const;
@@ -58,13 +61,14 @@ namespace vovochka
         std::size_t m_pathIdx = 0;
         float m_thinkTimer = 0.0f;
 
-        static constexpr float kThinkTimer = 1.0f;
+        static constexpr float kThinkTimer = 6.0f;
 
         bool bfs(const LevelMap &map, int sx, int sy, int tx, int ty,
                  std::vector<std::pair<int, int>> &out) const;
         void buildPath(const LevelMap &map, int tx, int ty);
         void buildRandomPath(const LevelMap &map);
         void chooseDirection(float dt, const LevelMap &map);
+        Rectangle offsetBounds(const Animation &anim) const;
     };
 
 } // namespace vovochka

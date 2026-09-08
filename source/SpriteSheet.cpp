@@ -71,17 +71,10 @@ namespace vovochka
     // Не зависит от особенностей ImageColorReplace (точное совпадение + альфа).
     static void applyChromaKey(Image &img, Color key, int tolerance = 8)
     {
-        // Принудительно RGBA8 — гарантированно есть альфа-канал
         ImageFormat(&img, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
-
-        // Диагностика: цвет углового пикселя (у тайлсетов это фон-лайм)
-        Color corner = GetImageColor(img, 0, 0);
-        TraceLog(LOG_INFO, "ChromaKey: corner pixel = (%d, %d, %d, %d)",
-                 corner.r, corner.g, corner.b, corner.a);
 
         auto *p = static_cast<unsigned char *>(img.data);
         const int n = img.width * img.height;
-        int keyed = 0;
 
         for (int i = 0; i < n; ++i)
         {
@@ -90,18 +83,67 @@ namespace vovochka
             const int dg = (int)c[1] - (int)key.g;
             const int db = (int)c[2] - (int)key.b;
 
-            if (std::abs(dr) <= tolerance && std::abs(dg) <= tolerance && std::abs(db) <= tolerance)
+            if (std::abs(dr) <= tolerance &&
+                std::abs(dg) <= tolerance &&
+                std::abs(db) <= tolerance)
             {
                 c[3] = 0;
-                ++keyed;
             }
         }
-
-        TraceLog(LOG_INFO, "ChromaKey: %d / %d pixels made transparent", keyed, n);
     }
 
-    bool SpriteSheetManager::loadFromIni(const std::string &iniPath,
-                                         const std::string &graphicsDir)
+    void SpriteSheetManager::computeVisibleBounds(SpriteSheetGPU &sheet, const Image &img)
+    {
+        sheet.visibleBounds.resize(sheet.frameCount);
+
+        const int cellW = sheet.patternW + sheet.skipW;
+        const int cellH = sheet.patternH + sheet.skipH;
+
+        for (int frameIdx = 0; frameIdx < sheet.frameCount; ++frameIdx)
+        {
+            const int ix = frameIdx % sheet.cols;
+            const int iy = frameIdx / sheet.cols;
+
+            const int startX = sheet.skipW + ix * cellW;
+            const int startY = sheet.skipH + iy * cellH;
+
+            int minX = sheet.patternW, minY = sheet.patternH;
+            int maxX = -1, maxY = -1;
+
+            for (int y = 0; y < sheet.patternH; ++y)
+            {
+                for (int x = 0; x < sheet.patternW; ++x)
+                {
+                    Color c = GetImageColor(img, startX + x, startY + y);
+                    if (c.a > 0) // непрозрачный пиксель
+                    {
+                        if (x < minX)
+                            minX = x;
+                        if (y < minY)
+                            minY = y;
+                        if (x > maxX)
+                            maxX = x;
+                        if (y > maxY)
+                            maxY = y;
+                    }
+                }
+            }
+
+            if (maxX < 0) // полностью прозрачный кадр
+            {
+                sheet.visibleBounds[frameIdx] = Rectangle{0, 0, 0, 0};
+            }
+            else
+            {
+                sheet.visibleBounds[frameIdx] = Rectangle{static_cast<float>(minX),
+                                                          static_cast<float>(minY),
+                                                          static_cast<float>(maxX - minX + 1),
+                                                          static_cast<float>(maxY - minY + 1)};
+            }
+        }
+    }
+
+    bool SpriteSheetManager::loadFromIni(const std::string &iniPath, const std::string &graphicsDir)
     {
         IniReader ini;
         if (!ini.loadFile(iniPath))
@@ -128,8 +170,7 @@ namespace vovochka
 
             if (def.patternW <= 0 || def.patternH <= 0)
             {
-                TraceLog(LOG_WARNING, "Skipping '%s': invalid pattern %dx%d",
-                         sec.c_str(), def.patternW, def.patternH);
+                TraceLog(LOG_WARNING, "Skipping '%s': invalid pattern %dx%d", sec.c_str(), def.patternW, def.patternH);
                 continue;
             }
 
@@ -167,7 +208,6 @@ namespace vovochka
 
             if (def.transparent)
             {
-                // ImageColorReplace(&img, unpackColor(def.transparentColor), BLANK);
                 applyChromaKey(img, unpackColor(def.transparentColor));
             }
 
@@ -183,6 +223,8 @@ namespace vovochka
             gpu.cols = (cellW > 0) ? (gpu.texture.width / cellW) : 1;
             gpu.rows = (cellH > 0) ? (gpu.texture.height / cellH) : 1;
             gpu.frameCount = gpu.cols * gpu.rows;
+
+            computeVisibleBounds(gpu, img);
 
             UnloadImage(img);
 
