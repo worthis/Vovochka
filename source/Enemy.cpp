@@ -35,24 +35,19 @@ namespace vovochka
 
         m_dirX = 1; // старт вправо; первое решение — в update
         m_snapping = false;
+
+        updateClimbing(map);
     }
 
     int Enemy::patW() const { return m_animWalk.sheet ? m_animWalk.sheet->patternW : 104; }
     int Enemy::patH() const { return m_animWalk.sheet ? m_animWalk.sheet->patternH : 128; }
-    float Enemy::surfaceYForTile(int tileY) const
-    {
-        return (tileY + 1) * m_tileH - m_tileH * 0.4f;
-    }
-
-    Rectangle Enemy::getBounds() const
-    {
-        return Rectangle{m_pos.x, m_pos.y, (float)patW(), (float)patH()};
-    }
 
     void Enemy::update(float dt, const LevelMap &map)
     {
         if (!alive)
             return;
+
+        updateClimbing(map);
 
         if (m_attacking)
         {
@@ -62,136 +57,30 @@ namespace vovochka
                 m_attackT >= m_attackDuration)
             {
                 m_attacking = false;
-                chooseDirection(map);
+                chooseDirection(dt, map);
             }
             return;
         }
 
         if (m_snapping)
         {
-            stepSnap(dt, map);
+            moveTowardsSnap(dt, map);
             m_animWalk.update(dt);
             if (!m_snapping)
-                chooseDirection(map); // доехали до центра — новое решение
+                chooseDirection(dt, map);
             clampToMap(map);
             return;
         }
 
-        chooseDirection(map); // стоим в центре — выбираем, куда идти
+        chooseDirection(dt, map);
         m_animWalk.update(dt);
         clampToMap(map);
     }
 
-    void Enemy::getAllowed(const LevelMap &map, bool &L, bool &R, bool &U, bool &D) const
-    {
-        L = R = U = D = false;
-        const TileKind here = map.kindAt(m_tileX, m_tileY);
-        const TileKind above = map.kindAt(m_tileX, m_tileY - 1);
-        const TileKind below = map.kindAt(m_tileX, m_tileY + 1);
-
-        switch (here)
-        {
-        case TileKind::Platform:
-            L = canOccupy(m_tileX - 1, m_tileY, map);
-            R = canOccupy(m_tileX + 1, m_tileY, map);
-            if (above == TileKind::Ladder || above == TileKind::LadderBase)
-                U = canClimbUp(m_tileX, m_tileY - 1, map);
-            break;
-        case TileKind::Ladder:
-            U = canClimbUp(m_tileX, m_tileY - 1, map);
-            D = canClimbDown(m_tileX, m_tileY + 1, map);
-            break;
-        case TileKind::LadderBase:
-            L = canOccupy(m_tileX - 1, m_tileY, map);
-            R = canOccupy(m_tileX + 1, m_tileY, map);
-            if (above != TileKind::LadderTop)
-                U = canClimbUp(m_tileX, m_tileY - 1, map);
-            if (below == TileKind::Ladder || below == TileKind::LadderBase)
-                D = true;
-            break;
-        case TileKind::LadderTop:
-            L = canOccupy(m_tileX - 1, m_tileY, map);
-            R = canOccupy(m_tileX + 1, m_tileY, map);
-            if (below == TileKind::Ladder || below == TileKind::LadderBase)
-                D = true;
-            break;
-        default:
-            break;
-        }
-    }
-
-    void Enemy::stepSnap(float dt, const LevelMap &map)
-    {
-        const int pw = patW(), ph = patH();
-        const float tx = m_snapTargetX * m_tileW + (m_tileW - pw) * 0.5f;
-        const float ty = surfaceYForTile(m_snapTargetY) - ph;
-
-        const float ddx = tx - m_pos.x;
-        const float ddy = ty - m_pos.y;
-        const float dist = std::sqrt(ddx * ddx + ddy * ddy);
-
-        if (dist < 2.0f)
-        {
-            m_pos.x = tx;
-            m_pos.y = ty;
-            m_tileX = m_snapTargetX;
-            m_tileY = m_snapTargetY;
-            m_snapping = false;
-        }
-        else
-        {
-            float step = m_speed * dt;
-            if (step > dist)
-                step = dist;
-            m_pos.x += (ddx / dist) * step;
-            m_pos.y += (ddy / dist) * step;
-        }
-    }
-
-    bool Enemy::canClimbUp(int x, int y, const LevelMap &map) const
-    {
-        if (!map.inBounds(x, y))
-            return false;
-        TileKind k = map.kindAt(x, y);
-        return k == TileKind::Ladder || k == TileKind::LadderBase;
-    }
-
-    bool Enemy::canClimbDown(int x, int y, const LevelMap &map) const
-    {
-        if (!map.inBounds(x, y))
-            return false;
-        TileKind k = map.kindAt(x, y);
-        return k == TileKind::Ladder || k == TileKind::LadderBase ||
-               k == TileKind::LadderTop || k == TileKind::Platform;
-    }
-
-    bool Enemy::canOccupy(int x, int y, const LevelMap &map) const
-    {
-        if (!map.inBounds(x, y))
-            return false;
-        TileKind k = map.kindAt(x, y);
-        return k == TileKind::Platform || k == TileKind::Ladder ||
-               k == TileKind::LadderBase || k == TileKind::LadderTop;
-    }
-
-    void Enemy::clampToMap(const LevelMap &map)
-    {
-        const int pw = patW(), ph = patH();
-        float cx = std::clamp(m_pos.x + pw * 0.5f, 0.0f, map.width * m_tileW);
-        m_pos.x = cx - pw * 0.5f;
-        float feet = std::clamp(m_pos.y + ph, 0.0f, map.height * m_tileH);
-        m_pos.y = feet - ph;
-    }
-
-    bool Enemy::isOnLadder(const LevelMap &map) const
-    {
-        const TileKind k = map.kindAt(m_tileX, m_tileY);
-        return k == TileKind::Ladder || k == TileKind::LadderBase || k == TileKind::LadderTop;
-    }
-
     void Enemy::startAttack(bool faceRight, bool loop)
     {
-        if (!m_animAttack.sheet || m_animAttack.sheet->frameCount < 2)
+        if (!m_animAttack.sheet ||
+            m_animAttack.sheet->frameCount < 2)
             return;
 
         m_attacking = true;
@@ -202,50 +91,6 @@ namespace vovochka
         const int half = m_animAttack.sheet->frameCount / 2;
         m_animAttack.setBlock(FrameBlock{faceRight ? 0 : half, half, loop});
         m_attackDuration = half * m_animAttack.frameTime;
-    }
-
-    void Enemy::stopAttack()
-    {
-        m_attacking = false;
-    }
-
-    void Enemy::getAllowedAt(const LevelMap &map, int x, int y,
-                             bool &L, bool &R, bool &U, bool &D) const
-    {
-        L = R = U = D = false;
-        const TileKind here = map.kindAt(x, y);
-        const TileKind above = map.kindAt(x, y - 1);
-        const TileKind below = map.kindAt(x, y + 1);
-
-        switch (here)
-        {
-        case TileKind::Platform:
-            L = canOccupy(x - 1, y, map);
-            R = canOccupy(x + 1, y, map);
-            if (above == TileKind::Ladder || above == TileKind::LadderBase)
-                U = canClimbUp(x, y - 1, map);
-            break;
-        case TileKind::Ladder:
-            U = canClimbUp(x, y - 1, map);
-            D = canClimbDown(x, y + 1, map);
-            break;
-        case TileKind::LadderBase:
-            L = canOccupy(x - 1, y, map);
-            R = canOccupy(x + 1, y, map);
-            if (above != TileKind::LadderTop)
-                U = canClimbUp(x, y - 1, map);
-            if (below == TileKind::Ladder || below == TileKind::LadderBase)
-                D = true;
-            break;
-        case TileKind::LadderTop:
-            L = canOccupy(x - 1, y, map);
-            R = canOccupy(x + 1, y, map);
-            if (below == TileKind::Ladder || below == TileKind::LadderBase)
-                D = true;
-            break;
-        default:
-            break;
-        }
     }
 
     bool Enemy::bfs(const LevelMap &map, int sx, int sy, int tx, int ty,
@@ -336,7 +181,7 @@ namespace vovochka
         const bool pathDone = m_path.empty() || m_pathIdx >= m_path.size();
 
         // не чаще 1000 мс, если пути нет — сразу
-        if (!pathDone && m_thinkTimer < 1.0f)
+        if (!pathDone && m_thinkTimer < kThinkTimer)
             return;
 
         m_thinkTimer = 0.0f;
@@ -347,12 +192,17 @@ namespace vovochka
             buildRandomPath(map); // бродит по карте
     }
 
-    void Enemy::chooseDirection(const LevelMap &map)
+    void Enemy::chooseDirection(float dt, const LevelMap &map)
     {
+        m_thinkTimer += dt;
+
         // обычным врагам путь строится здесь; боссу — в bossThink
         if (!isBoss &&
-            (m_path.empty() || m_pathIdx >= m_path.size()))
+            (m_thinkTimer >= kThinkTimer || m_path.empty() || m_pathIdx >= m_path.size()))
+        {
+            m_thinkTimer = 0.0f;
             buildRandomPath(map);
+        }
 
         if (m_path.empty() ||
             m_pathIdx >= m_path.size())
@@ -398,6 +248,7 @@ namespace vovochka
             m_animAttack.draw(m_pos.x, m_pos.y, false);
             return;
         }
+
         if (alive)
             m_animWalk.draw(m_pos.x, m_pos.y, false);
     }

@@ -272,9 +272,6 @@ namespace vovochka
                                         soundDuration("KISS"),
                                         soundDuration("GirlScream")});
 
-        m_intimacy.duration *= m_stats.power;
-        m_intimacy.duration /= m_stats.powerMax;
-
         playSound("GirlScream");
         playSound("KISS");
     }
@@ -289,9 +286,6 @@ namespace vovochka
             g.anim.setBlock(SpriteLayout::girlWait(false, wait->frameCount));
         }
 
-        stopSound("GirlScream");
-        stopSound("KISS");
-
         m_intimacy.active = false;
     }
 
@@ -301,19 +295,14 @@ namespace vovochka
         m_bossIntimacy.t = 0.0f;
         m_bossIntimacy.girlIdx = idx;
         m_bossIntimacy.powerStart = static_cast<float>(m_stats.power);
+        m_bossIntimacy.duration = std::max({3.326f, soundDuration("KISS")});
 
         auto &b = m_enemies[idx];
-        b.setTile(m_player.getTileX(), m_player.getTileY());
+        b.placeAt(m_player.getTileX(), m_player.getTileY());
         b.startAttack(m_player.getPixelPos().x >= b.getPixelPos().x, true);
 
-        // Длительность пропорциональна Power (как с девушками)
-        m_bossIntimacy.duration = std::max({3.326f,
-                                            soundDuration("KISS"),
-                                            soundDuration("GirlScream")});
-        m_bossIntimacy.duration *= m_stats.power;
-        m_bossIntimacy.duration /= m_stats.powerMax;
-
         playSound("attak");
+        playSound("KISS");
     }
 
     void Game::endBossIntimacy()
@@ -344,7 +333,7 @@ namespace vovochka
             m_player.isHurt())
             return false;
 
-        if (!m_player.canPlaceBomb(m_map))
+        if (m_player.isClimbing())
             return false;
 
         if (m_stats.power < m_diff.bombCost)
@@ -417,7 +406,7 @@ namespace vovochka
             e.anim.update(dt);
 
         // --- Девушки: попытка близости ---
-        constexpr float kGirlTriggerMargin = 8.0f; // срабатывать чуть раньше границы
+        constexpr float kGirlTriggerMargin = 9.0f; // срабатывать чуть раньше границы
         if (!m_intimacy.active &&
             !m_bossIntimacy.active)
         {
@@ -479,11 +468,7 @@ namespace vovochka
                 if (!e.alive)
                     continue;
 
-                /*if (!CheckCollisionRecs(pr, e.getBounds()))
-                    continue;*/
-
-                if (e.getTileX() != m_player.getTileX() ||
-                    e.getTileY() != m_player.getTileY())
+                if (!CheckCollisionRecs(pr, e.getBounds()))
                     continue;
 
                 m_player.cancelMakeBomb();
@@ -494,20 +479,22 @@ namespace vovochka
                 if (e.isBoss &&
                     m_bossGrabCooldown <= 0.0f &&
                     m_stats.power > 0 &&
-                    !m_player.isOnLadderNow() &&
-                    !e.isOnLadder(m_map))
+                    !m_player.isClimbing() &&
+                    !e.isClimbing())
                 {
                     startBossIntimacy(static_cast<int>(i));
                 }
                 else
                 {
-                    damagePlayer(e.isBoss && m_player.isOnLadderNow() ? 2 : 1);
+                    playSound("attak");
 
-                    if (!m_player.isOnLadderNow())
+                    damagePlayer(e.isBoss && m_player.isClimbing() ? 2 : 1);
+
+                    if (!m_player.isClimbing())
                         m_player.startHurt();
 
                     if (!e.isBoss &&
-                        !e.isOnLadder(m_map))
+                        !e.isClimbing())
                         e.startAttack(m_player.getPixelPos().x >= e.getPixelPos().x);
                 }
 
@@ -582,15 +569,14 @@ namespace vovochka
         // --- 5. Портал / LevelExit (появится со спавнером) ---
 
         // --- 6. Игрок (лезет по лестнице) ---
-        const bool playerBehind = m_player.isBehindFrontLayer();
         if (!m_intimacy.active &&
             !m_bossIntimacy.active &&
-            playerBehind)
+            m_player.isClimbing())
             m_player.draw();
 
         // --- 7. Враги ---
         for (const auto &e : m_enemies)
-            if (e.isBehindFrontLayer())
+            if (e.isClimbing())
                 e.draw();
 
         // --- 8. Фронт-слой: земля поверх стыков лестница×земля ---
@@ -599,12 +585,12 @@ namespace vovochka
         // --- 9. Игрок (идет мимо лестницы) ---
         if (!m_intimacy.active &&
             !m_bossIntimacy.active &&
-            !playerBehind)
+            !m_player.isClimbing())
             m_player.draw();
 
         // --- 10. Враги (идет мимо лестницы) ---
         for (const auto &e : m_enemies)
-            if (!e.isBehindFrontLayer())
+            if (!e.isClimbing())
                 e.draw();
 
         if (m_debugGrid)
