@@ -1,4 +1,3 @@
-// source/InputSystem.cpp
 #include "InputSystem.h"
 #include <cmath>
 

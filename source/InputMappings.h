@@ -1,4 +1,3 @@
-// source/InputMappings.h
 #pragma once
 
 #include "raylib.h"

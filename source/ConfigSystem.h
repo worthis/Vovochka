@@ -1,4 +1,3 @@
-// source/ConfigSystem.h
 #pragma once
 
 #include "raylib.h"

@@ -1,4 +1,3 @@
-// source/ConfigSystem.cpp
 #include "ConfigSystem.h"
 #include "InputMappings.h"
 #include <fstream>

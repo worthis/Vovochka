@@ -124,6 +124,7 @@ namespace vovochka
         buildFreePoints();
         spawnCondoms();
         spawnEnemies();
+        spawnLevelExit();
 
         m_bombs.clear();
         m_entities.clear();
@@ -242,9 +243,6 @@ namespace vovochka
         // Обновление игрока с вводом
         m_player.setInputEnabled(!m_intimacy.active && !m_bossIntimacy.active && m_deathTimer <= 0.0f);
         m_player.update(dt, m_map, m_input.getMoveX(), m_input.getMoveY(), wantBomb);
-
-        if (m_player.popMakeBombFinished())
-            spawnBombAtPlayer();
 
         // Камера
         updateCamera();
@@ -500,7 +498,15 @@ namespace vovochka
         updateBombs(dt);
 
         // --- Портал ---
-        m_exitActive = m_stats.score >= static_cast<float>(m_diff.scoreLevel);
+        updateLevelExit();
+
+        // --- Портал: проверка коллизии ---
+        if (m_levelExit.isActive() &&
+            m_levelExit.checkCollision(pr))
+        {
+            nextLevel();
+            return;
+        }
     }
 
     void Game::render()
@@ -560,7 +566,8 @@ namespace vovochka
             }
         }
 
-        // --- 5. Портал / LevelExit (появится со спавнером) ---
+        // --- 5. Портал ---
+        m_levelExit.draw();
 
         // --- 6. Игрок (лезет по лестнице) ---
         if (!m_intimacy.active &&
@@ -587,14 +594,6 @@ namespace vovochka
             if (!e.isClimbing())
                 e.draw();
 
-        if (m_debugGrid)
-        {
-            for (int x = 0; x <= m_map.width; ++x)
-                DrawLineV({x * tw, 0}, {x * tw, mapH}, ColorAlpha(WHITE, 0.15f));
-            for (int y = 0; y <= m_map.height; ++y)
-                DrawLineV({0, y * th}, {mapW, y * th}, ColorAlpha(WHITE, 0.15f));
-        }
-
         // --- бомбы ---
         if (const SpriteSheetGPU *bs = m_renderer.sheet("Bomb"))
         {
@@ -616,18 +615,17 @@ namespace vovochka
             }
         }
 
-        // --- взрыв: аддитив — чёрный фон не рисуется, огонь «светится» ---
+        // --- взрыв ---
         if (const SpriteSheetGPU *es = m_renderer.sheet("Explosion"))
         {
-            BeginBlendMode(BLEND_ADDITIVE);
+            BeginBlendMode(BLEND_ADD_COLORS);
             for (const auto &b : m_bombs)
             {
                 if (!b.exploding)
                     continue;
 
-                const int frame = std::min(
-                    static_cast<int>(b.explodeT / kExplosionFrameTime),
-                    es->frameCount - 1);
+                const int frame = std::min(static_cast<int>(b.explodeT / kExplosionFrameTime),
+                                           es->frameCount - 1);
 
                 Rectangle src = es->frame(frame);
                 Rectangle dst{b.tileX * tw + (tw - es->patternW) * 0.5f,
@@ -637,6 +635,36 @@ namespace vovochka
                 DrawTexturePro(es->texture, src, dst, {0, 0}, 0.0f, WHITE);
             }
             EndBlendMode();
+        }
+
+        if (m_debugGrid)
+        {
+            for (int x = 0; x <= m_map.width; ++x)
+                DrawLineV({x * tw, 0}, {x * tw, mapH}, ColorAlpha(WHITE, 0.15f));
+            for (int y = 0; y <= m_map.height; ++y)
+                DrawLineV({0, y * th}, {mapW, y * th}, ColorAlpha(WHITE, 0.15f));
+        }
+
+        // Экран победы
+        if (m_victory)
+        {
+            m_victoryTimer += GetFrameTime();
+
+            // Простой текст победы
+            const char *msg = "VICTORY!";
+            int fontSize = 48;
+            int textWidth = MeasureText(msg, fontSize);
+            int screenW = GetScreenWidth();
+            int screenH = GetScreenHeight();
+
+            DrawText(msg, (screenW - textWidth) / 2, screenH / 2 - fontSize / 2, fontSize, GOLD);
+            DrawText("Press any key to exit", (screenW - MeasureText("Press any key to exit", 20)) / 2,
+                     screenH / 2 + 50, 20, WHITE);
+
+            if (m_victoryTimer > 2.0f && IsKeyPressed(KEY_SPACE))
+            {
+                m_running = false;
+            }
         }
 
         EndMode2D();
@@ -847,11 +875,31 @@ namespace vovochka
         m_bombs.push_back(b);
     }
 
+    void Game::spawnLevelExit()
+    {
+        if (m_freePoints.empty())
+            return;
+
+        // Выбираем случайную свободную точку
+        std::size_t idx = static_cast<std::size_t>(GetRandomValue(0, m_freePoints.size() - 1));
+        auto [tx, ty] = m_freePoints[idx];
+
+        // Инициализация портала в выбранной точке
+        const float tw = static_cast<float>(m_renderer.tileW());
+        const float th = static_cast<float>(m_renderer.tileH());
+
+        m_levelExit.init(m_map, m_renderer.sheet("LevelExit"), tx, ty, tw, th);
+        m_levelExit.setActive(false);
+    }
+
     void Game::updateBombs(float dt)
     {
         const SpriteSheetGPU *es = m_renderer.sheet("Explosion");
         const float tw = static_cast<float>(m_renderer.tileW());
         const float th = static_cast<float>(m_renderer.tileH());
+
+        if (m_player.popMakeBombFinished())
+            spawnBombAtPlayer();
 
         for (auto it = m_bombs.begin(); it != m_bombs.end();)
         {
@@ -869,14 +917,7 @@ namespace vovochka
             }
             else
             {
-                Rectangle exRect{b.tileX * tw, b.tileY * th, tw, th};
-                if (es)
-                {
-                    exRect = Rectangle{b.tileX * tw + (tw - es->patternW) * 0.5f,
-                                       b.tileY * th + (th - es->patternH) * 0.5f + kExplosionDy,
-                                       static_cast<float>(es->patternW),
-                                       static_cast<float>(es->patternH)};
-                }
+                Rectangle exRect = getExplosionBounds(b, es, tw, th);
 
                 explosionDamage(b, exRect);
 
@@ -889,6 +930,29 @@ namespace vovochka
             }
             ++it;
         }
+    }
+
+    Rectangle Game::getExplosionBounds(const Bomb &b, const SpriteSheetGPU *es, float tw, float th)
+    {
+        if (!es || es->visibleBounds.empty())
+        {
+            // Fallback: номинальный размер
+            return Rectangle{b.tileX * tw, b.tileY * th, tw, th};
+        }
+
+        // Определяем текущий кадр взрыва
+        int currentFrame = static_cast<int>(b.explodeT / kExplosionFrameTime);
+        if (currentFrame >= es->frameCount)
+            currentFrame = es->frameCount - 1;
+
+        // Получаем видимые границы без чёрного фона
+        Rectangle vb = es->visibleBounds[currentFrame];
+
+        // Позиция взрыва (как в render)
+        const float drawX = b.tileX * tw + (tw - es->patternW) * 0.5f;
+        const float drawY = b.tileY * th + (th - es->patternH) * 0.5f + kExplosionDy;
+
+        return Rectangle{drawX + vb.x, drawY + vb.y, vb.width, vb.height};
     }
 
     void Game::explosionDamage(Bomb &b, const Rectangle &exRect)
@@ -932,6 +996,55 @@ namespace vovochka
                                        [](const Enemy &e)
                                        { return !e.alive; }),
                         m_enemies.end());
+    }
+
+    void Game::updateLevelExit()
+    {
+        // Активируем портал, когда Score >= ScoreLevel
+        bool shouldActivate = m_stats.score >= static_cast<float>(m_diff.scoreLevel);
+
+        if (shouldActivate &&
+            !m_levelExit.isActive())
+        {
+            activateLevelExit();
+        }
+        else if (!shouldActivate &&
+                 m_levelExit.isActive())
+        {
+            m_levelExit.setActive(false);
+        }
+
+        m_levelExit.update(GetFrameTime());
+    }
+
+    void Game::activateLevelExit()
+    {
+        m_levelExit.setActive(true);
+        playSound("WNCE");
+    }
+
+    void Game::nextLevel()
+    {
+        playSound("LevelComplete");
+
+        if (m_currentLevel >= 12)
+        {
+            // Победа!
+            showVictory();
+        }
+        else
+        {
+            // Следующий уровень
+            setLevel(m_currentLevel + 1);
+        }
+    }
+
+    void Game::showVictory()
+    {
+        m_victory = true;
+        m_victoryTimer = 0.0f;
+        playSound("Victory");
+        // Можно показать экран победы
     }
 
     void Game::damagePlayer(int dmg)

@@ -5,6 +5,7 @@
 #include "Animation.h"
 #include "Player.h"
 #include "Enemy.h"
+#include "LevelExit.h"
 #include "InputSystem.h"
 #include "ConfigSystem.h"
 #include "raylib.h"
@@ -86,6 +87,7 @@ namespace vovochka
         std::vector<CondomStack> m_condoms;
         std::unordered_map<std::string, Sound> m_sounds;
         std::vector<Enemy> m_enemies;
+        LevelExit m_levelExit;
 
         float m_laughTimer = 0.0f;
         bool m_exitActive = false;
@@ -96,6 +98,8 @@ namespace vovochka
         float m_deathTimer = 0.0f;
         float m_hurtTimer = 0.0f;        // i-frames после урона
         float m_bossGrabCooldown = 0.0f; // кулдаун до повторного захвата
+        bool m_victory = false;          // победа после 12 уровня
+        float m_victoryTimer = 0.0f;
 
         std::vector<Bomb> m_bombs;
 
@@ -110,6 +114,7 @@ namespace vovochka
         void spawnCondoms();
         void spawnBombAtPlayer();
         void spawnEnemies();
+        void spawnLevelExit();
 
         void update(float dt);         // системный уровень: ввод, игрок, камера
         void updateGameplay(float dt); // игровая логика: предметы, враги, бомбы, близость
@@ -119,6 +124,7 @@ namespace vovochka
         void updateCamera();
         void render();
 
+        Rectangle getExplosionBounds(const Bomb &b, const SpriteSheetGPU *es, float tw, float th);
         void explosionDamage(Bomb &b, const Rectangle &exRect);
         void damagePlayer(int dmg);
         void killPlayer();
@@ -127,6 +133,11 @@ namespace vovochka
         void endIntimacy();
         void startBossIntimacy(int bossIdx);
         void endBossIntimacy();
+
+        void updateLevelExit();
+        void activateLevelExit();
+        void nextLevel();
+        void showVictory();
 
         void loadSounds();
         void unloadSounds();

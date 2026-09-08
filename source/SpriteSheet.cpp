@@ -68,7 +68,6 @@ namespace vovochka
     }
 
     // Ручной chroma-key: все пиксели, близкие к key, делаем полностью прозрачными.
-    // Не зависит от особенностей ImageColorReplace (точное совпадение + альфа).
     static void applyChromaKey(Image &img, Color key, int tolerance = 8)
     {
         ImageFormat(&img, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
