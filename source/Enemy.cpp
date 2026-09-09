@@ -25,6 +25,10 @@ namespace vovochka
         m_pos.x = tileX * m_tileW + (m_tileW - pw) * 0.5f;
         m_pos.y = surfaceYForTile(tileY) - ph;
 
+        m_lastTileX = m_tileX;
+        m_lastTileY = m_tileY;
+        m_tileChangedFlag = false;
+
         m_animWalk.sheet = walkSheet;
         if (walkSheet)
             m_animWalk.setBlock(SpriteLayout::walk(SpriteLayout::WalkAnim::Right, walkSheet->frameCount));
@@ -48,7 +52,7 @@ namespace vovochka
             return offsetBounds(m_animAttack);
         if (alive)
             return offsetBounds(m_animWalk);
-            
+
         return Rectangle{0, 0, 0, 0};
     }
 
@@ -91,6 +95,7 @@ namespace vovochka
         chooseDirection(dt, map);
         m_animWalk.update(dt);
         clampToMap(map);
+        updateTileChanging();
     }
 
     void Enemy::startAttack(bool faceRight, bool loop)
@@ -242,6 +247,7 @@ namespace vovochka
         m_snapTargetX = next.first;
         m_snapTargetY = next.second;
         m_snapping = true;
+        m_facingRight = (m_dirX > 0);
 
         SpriteLayout::WalkAnim a;
         if (m_dirY != 0)
@@ -250,6 +256,7 @@ namespace vovochka
             a = SpriteLayout::WalkAnim::Right;
         else
             a = SpriteLayout::WalkAnim::Left;
+
         if (a != m_currentWalkAnim && m_animWalk.sheet)
         {
             m_currentWalkAnim = a;

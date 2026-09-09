@@ -22,16 +22,22 @@ namespace vovochka
         void placeAt(int tileX, int tileY);
 
         bool isClimbing() const { return m_climbing; }
+        bool isFacingRight() const { return m_facingRight; }
+        bool isMoving() const { return m_snapping || m_dirX != 0 || m_dirY != 0; }
+        bool popTileChanged();
 
     protected:
         Vector2 m_pos{};
         int m_tileX = 0, m_tileY = 0;
+        int m_lastTileX = -1, m_lastTileY = -1;
         int m_dirX = 0, m_dirY = 0, m_lastDirX = 0, m_lastDirY = 0;
+        int m_snapTargetX = 0, m_snapTargetY = 0;
         float m_speed = 200.0f;
         float m_tileW = 80, m_tileH = 80;
+        bool m_tileChangedFlag = false;
+        bool m_facingRight = true;
         bool m_climbing = false;
         bool m_snapping = false;
-        int m_snapTargetX = 0, m_snapTargetY = 0;
 
         bool canClimbUp(int x, int y, const LevelMap &map) const;
         bool canClimbDown(int x, int y, const LevelMap &map) const;
@@ -46,6 +52,7 @@ namespace vovochka
 
         void clampToMap(const LevelMap &map);
         void updateClimbing(const LevelMap &map);
+        void updateTileChanging();
         void moveTowardsSnap(float dt, const LevelMap &map);
 
         virtual int patW() const = 0;

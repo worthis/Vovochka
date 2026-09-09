@@ -148,6 +148,15 @@ namespace vovochka
         }
 
         updateCamera();
+
+        // Запуск фоновой музыки
+        if (m_musicLoaded)
+        {
+            StopMusicStream(m_music);
+            PlayMusicStream(m_music);
+            SetMusicVolume(m_music, m_musicVolume);
+            m_musicPlaying = true;
+        }
     }
 
     void Game::updateCamera()
@@ -226,6 +235,12 @@ namespace vovochka
         // Системный ввод (отладка, смена уровня)
         processSystemInput();
 
+        // Обновление фоновой музыки
+        if (m_musicLoaded && m_musicPlaying)
+        {
+            UpdateMusicStream(m_music);
+        }
+
         // Гибель игрока: пауза и рестарт уровня
         if (m_deathTimer > 0.0f)
         {
@@ -243,6 +258,9 @@ namespace vovochka
         // Обновление игрока с вводом
         m_player.setInputEnabled(!m_intimacy.active && !m_bossIntimacy.active && m_deathTimer <= 0.0f);
         m_player.update(dt, m_map, m_input.getMoveX(), m_input.getMoveY(), wantBomb);
+
+        // Обновление звуков шагов
+        updateFootsteps();
 
         // Камера
         updateCamera();
@@ -276,6 +294,7 @@ namespace vovochka
 
     void Game::endIntimacy()
     {
+        m_intimacy.active = false;
         auto &g = m_entities[m_intimacy.girlIdx];
         g.used = true;
         if (const SpriteSheetGPU *wait = m_renderer.sheet("Girl1Wait"))
@@ -283,8 +302,7 @@ namespace vovochka
             g.anim.sheet = wait;
             g.anim.setBlock(SpriteLayout::girlWait(false, wait->frameCount));
         }
-
-        m_intimacy.active = false;
+        playSound("PlayerCackle");
     }
 
     void Game::startBossIntimacy(int idx)
@@ -297,7 +315,7 @@ namespace vovochka
 
         auto &b = m_enemies[idx];
         b.placeAt(m_player.getTileX(), m_player.getTileY());
-        b.startAttack(m_player.getPixelPos().x >= b.getPixelPos().x, true);
+        b.startAttack(b.isFacingRight(), true);
 
         playSound("attak");
         playSound("KISS");
@@ -309,9 +327,7 @@ namespace vovochka
         m_bossGrabCooldown = kBossGrabCooldown;
         auto &b = m_enemies[m_bossIntimacy.girlIdx];
         b.stopAttack();
-
         damagePlayer(1);
-
         playSound("PlayerCackle");
     }
 
@@ -320,22 +336,17 @@ namespace vovochka
         if (!m_input.isBombPressed())
             return false;
 
-        if (m_intimacy.active ||
-            m_bossIntimacy.active)
+        if (m_deathTimer > 0.0f ||
+            m_intimacy.active ||
+            m_bossIntimacy.active ||
+            m_player.isMakingBomb() ||
+            m_player.isHurt() ||
+            m_player.isClimbing() ||
+            m_stats.power < m_diff.bombCost)
+        {
+            playSound("PENALTY");
             return false;
-
-        if (m_deathTimer > 0.0f)
-            return false;
-
-        if (m_player.isMakingBomb() ||
-            m_player.isHurt())
-            return false;
-
-        if (m_player.isClimbing())
-            return false;
-
-        if (m_stats.power < m_diff.bombCost)
-            return false;
+        }
 
         m_stats.power -= m_diff.bombCost;
         playSound("Breath");
@@ -506,6 +517,24 @@ namespace vovochka
         {
             nextLevel();
             return;
+        }
+    }
+
+    void Game::updateFootsteps()
+    {
+        if (!m_player.popTileChanged())
+            return;
+
+        if (m_player.isClimbing())
+        {
+            if (IsSoundValid(m_stairsSound))
+                PlaySound(m_stairsSound);
+            return;
+        }
+
+        if (IsSoundValid(m_moveSound))
+        {
+            PlaySound(m_moveSound);
         }
     }
 
@@ -965,7 +994,7 @@ namespace vovochka
             killPlayer();
         }
 
-        // враги: разово каждому (id в hitEnemyIds)
+        // враги: разово каждому
         for (auto &e : m_enemies)
         {
             if (!e.alive)
@@ -982,12 +1011,14 @@ namespace vovochka
                 if (++e.bombHits >= m_diff.enemyGirlLifeMax)
                 {
                     e.alive = false;
+                    playSound("YEAH");
                     m_stats.score = std::min(100.0f, m_stats.score + 12.0f);
                 }
             }
             else
             {
                 e.alive = false;
+                playSound("YEAH");
                 m_stats.score = std::min(100.0f, m_stats.score + 2.0f);
             }
         }
@@ -1020,7 +1051,7 @@ namespace vovochka
     void Game::activateLevelExit()
     {
         m_levelExit.setActive(true);
-        playSound("WNCE");
+        // playSound("WNCE");
     }
 
     void Game::nextLevel()
@@ -1044,13 +1075,13 @@ namespace vovochka
         m_victory = true;
         m_victoryTimer = 0.0f;
         playSound("Victory");
-        // Можно показать экран победы
     }
 
     void Game::damagePlayer(int dmg)
     {
         if (m_hurtTimer > 0.0f)
             return;
+
         m_hurtTimer = 1.0f;
         m_stats.health -= dmg;
         if (m_stats.health <= 0)
@@ -1058,13 +1089,15 @@ namespace vovochka
             m_stats.health = 0;
             killPlayer();
         }
+
+        playSound("WNCE");
     }
 
     void Game::killPlayer()
     {
         m_stats.health = 0;
-        playSound("Scream");
         m_deathTimer = 1.0f;
+        playSound("Scream");
     }
 
     void Game::loadSounds()
@@ -1094,8 +1127,26 @@ namespace vovochka
             }
         };
 
-        loadDir(resolveDirCI(m_dataRoot, {"Common", "LevelSounds"}));
-        loadDir(resolveDirCI(m_dataRoot, {("LEVEL" + std::to_string(m_currentLevel)).c_str(), "Sound"}));
+        std::filesystem::path commonSoundDir = resolveDirCI(m_dataRoot, {"Common", "LevelSounds"});
+        std::filesystem::path levelSoundDir = resolveDirCI(m_dataRoot, {("LEVEL" + std::to_string(m_currentLevel)).c_str(), "Sound"});
+
+        loadDir(commonSoundDir);
+        loadDir(levelSoundDir);
+
+        m_moveSound = getSound("MOVE");
+        m_stairsSound = getSound("STAIRS");
+
+        std::filesystem::path musicPath = levelSoundDir / "FON.WAV";
+        if (FileExists(musicPath.string().c_str()))
+        {
+            m_music = LoadMusicStream(musicPath.string().c_str());
+            m_musicLoaded = true;
+            m_musicPlaying = false;
+            TraceLog(LOG_INFO, "Loaded level music: %s", musicPath.string().c_str());
+        }
+        else
+            TraceLog(LOG_WARNING, "Level music not found: %s", musicPath.string().c_str());
+
         TraceLog(LOG_INFO, "Sounds loaded: %d", (int)m_sounds.size());
     }
 
@@ -1104,6 +1155,23 @@ namespace vovochka
         for (auto &[name, s] : m_sounds)
             UnloadSound(s);
         m_sounds.clear();
+
+        if (m_musicLoaded)
+        {
+            UnloadMusicStream(m_music);
+            m_musicLoaded = false;
+            m_musicPlaying = false;
+        }
+    }
+
+    Sound Game::getSound(const char *name)
+    {
+        auto it = m_sounds.find(toLower(name));
+        if (it != m_sounds.end())
+            return it->second;
+
+        TraceLog(LOG_WARNING, "Sound not found: %s", name);
+        return Sound{};
     }
 
     void Game::playSound(const char *name)

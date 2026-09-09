@@ -60,6 +60,10 @@ namespace vovochka
         m_animWalk.timer = 0.0f;
         m_animWalk.frame = 0;
 
+        m_lastTileX = m_tileX;
+        m_lastTileY = m_tileY;
+        m_tileChangedFlag = false;
+
         updateClimbing(map);
     }
 
@@ -94,6 +98,7 @@ namespace vovochka
         const int pw = patW();
 
         updateClimbing(map);
+        updateTileChanging();
 
         // --- получение урона: стоим, анимация один раз ---
         if (m_hurt)
@@ -124,6 +129,7 @@ namespace vovochka
             {
                 beginBombAnim();
             }
+            clampToMap(map);
             return;
         }
 
@@ -214,11 +220,9 @@ namespace vovochka
             m_dirY = dirY;
             m_lastDirX = dirX;
             m_lastDirY = dirY;
+            m_facingRight = (dirX > 0);
 
             const float colCenter = m_tileX * m_tileW + m_tileW * 0.5f;
-
-            if (dirX != 0)
-                m_facingRight = (dirX > 0);
 
             if (dirY != 0)
             {
@@ -255,6 +259,7 @@ namespace vovochka
                 switchToStandAnim();
                 m_animStand.update(dt);
             }
+            clampToMap(map);
             return;
         }
 
@@ -270,6 +275,8 @@ namespace vovochka
             switchToStandAnim();
             m_animStand.update(dt);
         }
+
+        clampToMap(map);
     }
 
     void Player::checkTileCrossing(const LevelMap &map)

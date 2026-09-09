@@ -89,6 +89,13 @@ namespace vovochka
         std::vector<Enemy> m_enemies;
         LevelExit m_levelExit;
 
+        Sound m_stairsSound{};
+        Sound m_moveSound{};
+        Music m_music{};
+        bool m_musicLoaded = false;
+        bool m_musicPlaying = false;
+        float m_musicVolume = 0.5f;
+
         float m_laughTimer = 0.0f;
         bool m_exitActive = false;
         int m_difficulty = 1; // 1..3, клавиши 1/2/3
@@ -118,6 +125,7 @@ namespace vovochka
 
         void update(float dt);         // системный уровень: ввод, игрок, камера
         void updateGameplay(float dt); // игровая логика: предметы, враги, бомбы, близость
+        void updateFootsteps();        // звуки шагов игрока
         void processSystemInput();     // отладка, смена уровня/сложности
         bool checkBombConditions();    // проверка условий создания бомбы
         void updateBombs(float dt);
@@ -141,6 +149,7 @@ namespace vovochka
 
         void loadSounds();
         void unloadSounds();
+        Sound getSound(const char *name);
         void playSound(const char *name);
         void stopSound(const char *name);
         float soundDuration(const char *name) const;

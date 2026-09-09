@@ -43,7 +43,6 @@ namespace vovochka
 
         SpriteLayout::WalkAnim m_currentWalkAnim = SpriteLayout::WalkAnim::Right;
 
-        bool m_facingRight = true;
         bool m_makingBomb = false;
         float m_makeBombT = 0.0f;
         float m_makeBombDuration = 0.0f;

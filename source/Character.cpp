@@ -189,4 +189,21 @@ namespace vovochka
         clampToMap(map);
     }
 
+    void Character::updateTileChanging()
+    {
+        if (m_tileX != m_lastTileX || m_tileY != m_lastTileY)
+        {
+            m_lastTileX = m_tileX;
+            m_lastTileY = m_tileY;
+            m_tileChangedFlag = true;
+        }
+    }
+
+    bool Character::popTileChanged()
+    {
+        bool changed = m_tileChangedFlag;
+        m_tileChangedFlag = false;
+        return changed;
+    }
+
 } // namespace vovochka
