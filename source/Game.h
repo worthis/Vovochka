@@ -26,6 +26,15 @@ namespace vovochka
         void setLevel(int n); // 1..12
 
     private:
+        static constexpr float kSpeedScale = 2500.0f;
+        static constexpr float kBombFuse = 1.2f;            // время фитиля бомбы
+        static constexpr float kExplosionFrameTime = 0.05f; // время анимации взрыва
+        static constexpr float kExplosionDy = -70.0f;       // положение анимации взрыва по оси Y
+        static constexpr float kParallaxFactor = 0.3f;      // Параллакс фона: 0 = неподвижен, 1 = вместе с камерой
+        static constexpr float kBossGrabCooldown = 1.5f;    // кулдаун захвата 1500 мс
+        static constexpr int kMinimapLineTh = 4;            // толщина линий карты, px
+        static constexpr int kMinimapMarkerSize = 4;        // размер квадратиков-меток, px
+
         struct PreviewEntity
         {
             Animation anim;
@@ -85,6 +94,7 @@ namespace vovochka
         std::vector<PreviewEntity> m_entities;
         std::vector<std::pair<int, int>> m_freePoints; // тайлы земли для спавна
         std::vector<CondomStack> m_condoms;
+        std::vector<Bomb> m_bombs;
         std::unordered_map<std::string, Sound> m_sounds;
         std::vector<Enemy> m_enemies;
         LevelExit m_levelExit;
@@ -107,15 +117,8 @@ namespace vovochka
         float m_bossGrabCooldown = 0.0f; // кулдаун до повторного захвата
         bool m_victory = false;          // победа после 12 уровня
         float m_victoryTimer = 0.0f;
-
-        std::vector<Bomb> m_bombs;
-
-        static constexpr float kSpeedScale = 2000.0f;
-        static constexpr float kBombFuse = 1.2f;            // время фитиля бомбы
-        static constexpr float kExplosionFrameTime = 0.05f; // время анимации взрыва
-        static constexpr float kExplosionDy = -70.0f;       // положение анимации взрыва по оси Y
-        static constexpr float kParallaxFactor = 0.3f;      // Параллакс фона: 0 = неподвижен, 1 = вместе с камерой
-        static constexpr float kBossGrabCooldown = 1.5f;    // кулдаун захвата 1500 мс
+        int m_lives = 3; // жизни игрока (3 изначально)
+        bool m_gameOver = false;
 
         void buildFreePoints();
         void spawnCondoms();
@@ -131,11 +134,15 @@ namespace vovochka
         void updateBombs(float dt);
         void updateCamera();
         void render();
+        void renderHUD();
 
         Rectangle getExplosionBounds(const Bomb &b, const SpriteSheetGPU *es, float tw, float th);
         void explosionDamage(Bomb &b, const Rectangle &exRect);
         void damagePlayer(int dmg);
         void killPlayer();
+
+        void drawBar(Rectangle r, float fraction);
+        void drawMinimap(Rectangle r);
 
         void startIntimacy(int girlIdx);
         void endIntimacy();

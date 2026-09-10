@@ -247,9 +247,25 @@ namespace vovochka
             m_deathTimer -= dt;
             if (m_deathTimer <= 0.0f)
             {
-                setLevel(m_currentLevel);
-                return;
+                --m_lives;
+                if (m_lives > 0)
+                    setLevel(m_currentLevel); // переиграть уровень
+                else
+                    m_gameOver = true; // жизни кончились
             }
+        }
+
+        // Game over: по клавише — сброс в начало
+        if (m_gameOver)
+        {
+            if (m_input.isPausePressed() ||
+                m_input.isBombPressed())
+            {
+                m_lives = 3;
+                m_gameOver = false;
+                setLevel(1);
+            }
+            return; // не обновляем геймплей
         }
 
         // Проверка условий создания бомбы
@@ -336,15 +352,19 @@ namespace vovochka
         if (!m_input.isBombPressed())
             return false;
 
+        if (m_player.isClimbing() ||
+            m_stats.power < m_diff.bombCost)
+        {
+            playSound("PENALTY");
+            return false;
+        }
+
         if (m_deathTimer > 0.0f ||
             m_intimacy.active ||
             m_bossIntimacy.active ||
             m_player.isMakingBomb() ||
-            m_player.isHurt() ||
-            m_player.isClimbing() ||
-            m_stats.power < m_diff.bombCost)
+            m_player.isHurt())
         {
-            playSound("PENALTY");
             return false;
         }
 
@@ -698,11 +718,8 @@ namespace vovochka
 
         EndMode2D();
 
-        DrawText(TextFormat("HP %d/%d", m_stats.health, m_stats.healthMax), 10, 10, 16, RED);
-        DrawText(TextFormat("Power %d/%d", m_stats.power, m_stats.powerMax), 160, 10, 16, YELLOW);
-        DrawText(TextFormat("Score %d/%d%s", (int)m_stats.score, m_diff.scoreLevel,
-                            m_exitActive ? "  EXIT OPEN" : ""),
-                 320, 10, 16, GREEN);
+        // HUD
+        renderHUD();
 
         EndDrawing();
     }
@@ -1098,6 +1115,171 @@ namespace vovochka
         m_stats.health = 0;
         m_deathTimer = 1.0f;
         playSound("Scream");
+    }
+
+    void Game::renderHUD()
+    {
+        constexpr float kHudBaseWidth = 800.0f;
+        float ox = (GetScreenWidth() - kHudBaseWidth) * 0.5f;
+        if (ox < 0.0f)
+            ox = 0.0f;
+
+        // === 1. Индикатор Power ===
+        if (m_stats.power > 0)
+        {
+            if (const SpriteSheetGPU *ps = m_renderer.sheet("Progress1"))
+            {
+                int frame = std::clamp(m_stats.power - 1, 0, ps->frameCount - 1);
+                Rectangle src = ps->frame(frame);
+                Rectangle dst{5.0f, 5.0f, (float)ps->patternW, (float)ps->patternH};
+                DrawTexturePro(ps->texture, src, dst, {0, 0}, 0.0f, WHITE);
+            }
+        }
+
+        // === 2. Кирпичная панель ===
+        if (const SpriteSheetGPU *pf = m_renderer.sheet("ProgressFon"))
+        {
+            Rectangle src = pf->frame(0);
+            Rectangle dst{128.0f + ox, 0.0f, (float)pf->patternW, (float)pf->patternH};
+            DrawTexturePro(pf->texture, src, dst, {0, 0}, 0.0f, WHITE);
+        }
+
+        // === Шкалы ===
+        drawBar(Rectangle{152.0f + ox, 30.0f, 128.0f, 10.0f},
+                (float)m_stats.health / (float)m_stats.healthMax);
+        drawBar(Rectangle{298.0f + ox, 30.0f, 128.0f, 10.0f},
+                m_stats.score / 100.0f);
+
+        // === Цифры ===
+        DrawText(TextFormat("%d", m_stats.health), (int)(237.0f + ox), 8, 20, YELLOW);
+        DrawText(TextFormat("%d", (int)m_stats.score), (int)(380.0f + ox), 8, 20, YELLOW);
+
+        // === 3. Жизни (головы) ===
+        if (const SpriteSheetGPU *ap = m_renderer.sheet("AttemptProgress"))
+        {
+            for (int i = 0; i < m_lives; ++i)
+            {
+                Rectangle src = ap->frame(i < 5 ? i : 4);
+                Rectangle dst{475.0f + ox + i * (ap->patternW + 15), 10.0f,
+                              (float)ap->patternW, (float)ap->patternH};
+                DrawTexturePro(ap->texture, src, dst, {0, 0}, 0.0f, WHITE);
+            }
+        }
+
+        // === 4. Миникарта ===
+        drawMinimap(Rectangle{(float)GetScreenWidth() - 112.0f, 8.0f, 100.0f, 100.0f});
+
+        // === Game over поверх HUD ===
+        if (m_gameOver)
+        {
+            const char *msg = "GAME OVER";
+            int fs = 48;
+            int w = MeasureText(msg, fs);
+            DrawText(msg, (GetScreenWidth() - w) / 2, GetScreenHeight() / 2 - fs / 2, fs, RED);
+            const char *hint = "Press SPACE to restart";
+            DrawText(hint, (GetScreenWidth() - MeasureText(hint, 20)) / 2,
+                     GetScreenHeight() / 2 + 40, 20, WHITE);
+        }
+    }
+
+    void Game::drawBar(Rectangle r, float fraction)
+    {
+        fraction = std::clamp(fraction, 0.0f, 1.0f);
+
+        // Градиент красный->жёлтый->зелёный, обрезанный по fraction
+        int fillW = (int)(r.width * fraction);
+        for (int x = 0; x < fillW; ++x)
+        {
+            float t = (float)x / r.width; // позиция по ВСЕЙ ширине
+            Color c;
+            if (t < 0.5f)
+                c = ColorLerp(RED, YELLOW, t * 2.0f);
+            else
+                c = ColorLerp(YELLOW, GREEN, (t - 0.5f) * 2.0f);
+            DrawRectangle((int)r.x + x, (int)r.y, 1, (int)r.height, c);
+        }
+    }
+
+    void Game::drawMinimap(Rectangle r)
+    {
+        const Color cMap{0, 168, 0, 255};        // ярко-зелёный: карта (платформы/лестницы)
+        const Color cGirl{0, 255, 0, 255};       // светло-зелёный: девушки
+        const Color cGirlUsed{255, 255, 0, 255}; // жёлтый: использованные
+        const Color cEnemy{255, 0, 0, 255};      // красный: обычные враги
+        const Color cBoss{255, 105, 180, 255};   // розовый: enemy girl
+        const Color cPlayer{0, 0, 160, 255};     // тёмно-синий: игрок
+        const Color cPortal{0, 170, 255, 255};   // голубой: портал
+        const Color cCamFill{210, 240, 210, 60}; // светлый полупрозрачный: камера
+
+        const float sx = r.width / (float)m_map.width;
+        const float sy = r.height / (float)m_map.height;
+        const int th = kMinimapLineTh;
+        const int mk = kMinimapMarkerSize;
+
+        // === Карта: платформы — горизонтали, лестницы — вертикали ===
+        for (int y = 0; y < m_map.height; ++y)
+        {
+            for (int x = 0; x < m_map.width; ++x)
+            {
+                TileKind k = m_map.kindAt(x, y);
+                float px = r.x + x * sx;
+                float py = r.y + y * sy;
+
+                // Горизонталь: ряд платформ, включая стыки лестниц
+                bool horizontal = (k == TileKind::Platform ||
+                                   k == TileKind::LadderBase);
+                // Вертикаль: колонна лестницы, включая стыки
+                bool vertical = (k == TileKind::Ladder ||
+                                 k == TileKind::LadderBase ||
+                                 k == TileKind::LadderTop);
+
+                if (horizontal)
+                    DrawRectangle((int)px, (int)(py + sy * 0.5f - th * 0.5f),
+                                  (int)sx, th, cMap);
+                if (vertical)
+                    DrawRectangle((int)(px + sx * 0.5f - th * 0.5f), (int)py,
+                                  th, (int)sy, cMap);
+            }
+        }
+
+        // === Девушки ===
+        for (const auto &g : m_entities)
+        {
+            if (g.type != MapObjectType::Girl)
+                continue;
+            Color c = g.used ? cGirlUsed : cGirl;
+            DrawRectangle((int)(r.x + g.tileX * sx),
+                          (int)(r.y + (g.tileY - 0.5f) * sy), mk, mk, c);
+        }
+
+        // === Враги и босс ===
+        for (const auto &e : m_enemies)
+        {
+            if (!e.alive)
+                continue;
+            Color c = e.isBoss ? cBoss : cEnemy;
+            DrawRectangle((int)(r.x + e.getTileX() * sx),
+                          (int)(r.y + (e.getTileY() - 0.5f) * sy), mk, mk, c);
+        }
+
+        // === Портал ===
+        if (m_levelExit.isActive())
+        {
+            DrawRectangle((int)(r.x + m_levelExit.getTileX() * sx),
+                          (int)(r.y + (m_levelExit.getTileY() - 0.5f) * sy), mk, mk, cPortal);
+        }
+
+        // === Игрок ===
+        DrawRectangle((int)(r.x + m_player.getTileX() * sx),
+                      (int)(r.y + (m_player.getTileY() - 0.5f) * sy), mk, mk, cPlayer);
+
+        // === Прямоугольник камеры ===
+        float viewW = GetScreenWidth() / kTileWidth;
+        float viewH = GetScreenHeight() / kTileHeight;
+        float camTileX = m_camera.target.x / kTileWidth - viewW * 0.5f;
+        float camTileY = m_camera.target.y / kTileHeight - viewH * 0.5f;
+        Rectangle camRect{r.x + camTileX * sx, r.y + camTileY * sy, viewW * sx, viewH * sy};
+        DrawRectangleRec(camRect, cCamFill);
     }
 
     void Game::loadSounds()

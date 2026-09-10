@@ -13,6 +13,8 @@ namespace vovochka
         void init(const LevelMap &map, const SpriteSheetGPU *exitSheet,
                   int tileX, int tileY,
                   float tileW, float tileH);
+        int getTileX() const { return m_tileX; }
+        int getTileY() const { return m_tileY; }
         void update(float dt);
         void draw() const;
         void setActive(bool active) { m_active = active; };
