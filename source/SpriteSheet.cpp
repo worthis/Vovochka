@@ -1,5 +1,6 @@
 #include "SpriteSheet.h"
 #include "IniReader.h"
+#include "Utils.h"
 
 #include <algorithm>
 #include <cctype>
@@ -14,82 +15,7 @@
 namespace vovochka
 {
 
-    namespace fs = std::filesystem;
-
-    namespace
-    {
-
-        std::string toLowerCopy(std::string s)
-        {
-            for (auto &c : s)
-                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            return s;
-        }
-
-        std::string normalizePath(const fs::path &p)
-        {
-            std::string s = p.string();
-            std::replace(s.begin(), s.end(), '\\', '/');
-            return s;
-        }
-
-        // Индекс файлов папки: lower-case имя файла -> реальный путь.
-        // Регистр на диске может отличаться от имени секции
-        // (bg1 -> BG1.JPG, Set2 -> SET2.BMP, Girl1Wait -> Girl1Wait.bmp).
-        std::unordered_map<std::string, fs::path> buildFileIndex(const fs::path &dir)
-        {
-            std::unordered_map<std::string, fs::path> idx;
-            std::error_code ec;
-            if (!fs::is_directory(dir, ec))
-                return idx;
-
-            for (const auto &e : fs::directory_iterator(dir, ec))
-            {
-                if (ec)
-                    break;
-                std::error_code ec2;
-                if (!e.is_regular_file(ec2))
-                    continue;
-                idx.emplace(toLowerCopy(e.path().filename().string()), e.path());
-            }
-            return idx;
-        }
-
-    } // namespace
-
     SpriteSheetManager::~SpriteSheetManager() { unload(); }
-
-    Color SpriteSheetManager::unpackColor(uint32_t rgb)
-    {
-        return Color{static_cast<unsigned char>((rgb >> 16) & 0xFF),
-                     static_cast<unsigned char>((rgb >> 8) & 0xFF),
-                     static_cast<unsigned char>(rgb & 0xFF),
-                     255};
-    }
-
-    // Ручной chroma-key: все пиксели, близкие к key, делаем полностью прозрачными.
-    static void applyChromaKey(Image &img, Color key, int tolerance = 8)
-    {
-        ImageFormat(&img, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
-
-        auto *p = static_cast<unsigned char *>(img.data);
-        const int n = img.width * img.height;
-
-        for (int i = 0; i < n; ++i)
-        {
-            unsigned char *c = p + i * 4;
-            const int dr = (int)c[0] - (int)key.r;
-            const int dg = (int)c[1] - (int)key.g;
-            const int db = (int)c[2] - (int)key.b;
-
-            if (std::abs(dr) <= tolerance &&
-                std::abs(dg) <= tolerance &&
-                std::abs(db) <= tolerance)
-            {
-                c[3] = 0;
-            }
-        }
-    }
 
     void SpriteSheetManager::computeVisibleBounds(SpriteSheetGPU &sheet, const Image &img)
     {
@@ -176,7 +102,7 @@ namespace vovochka
             // Имя файла = имя секции.
             //   фон (bg*) -> .png (сконвертированный из оригинального JPG)
             //   остальное -> .bmp
-            const std::string base = toLowerCopy(sec);
+            const std::string base = toLower(sec);
             const bool isBackground = (base.rfind("bg", 0) == 0);
             const char *ext = isBackground ? ".png" : ".bmp";
 

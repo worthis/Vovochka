@@ -1,4 +1,5 @@
 #include "Game.h"
+#include "Utils.h"
 #include "SpriteLayout.h"
 #include "InputSystem.h"
 #include "ConfigSystem.h"
@@ -6,40 +7,6 @@
 #include <cmath>
 #include <filesystem>
 #include "raylib.h"
-
-std::string toLower(std::string s)
-{
-    for (auto &c : s)
-        c = static_cast<char>(std::tolower((unsigned char)c));
-    return s;
-}
-
-// регистронезависимый поиск подпапки по частям пути
-std::filesystem::path resolveDirCI(const std::filesystem::path &base,
-                                   std::initializer_list<const char *> parts)
-{
-    namespace fs = std::filesystem;
-    fs::path cur = base;
-    for (const char *part : parts)
-    {
-        bool found = false;
-        std::error_code ec;
-        for (auto &e : fs::directory_iterator(cur, ec))
-        {
-            if (ec)
-                break;
-            if (e.is_directory() && toLower(e.path().filename().string()) == toLower(part))
-            {
-                cur = e.path();
-                found = true;
-                break;
-            }
-        }
-        if (!found)
-            return {};
-    }
-    return cur;
-}
 
 namespace vovochka
 {
@@ -60,6 +27,8 @@ namespace vovochka
         m_camera.rotation = 0.0f;
         m_camera.offset = {screenW * 0.5f, screenH * 0.5f};
         m_camera.target = {0, 0};
+
+        m_fontHud.load(m_dataRoot + "/COMMON/FONT/Font6");
 
         setLevel(m_currentLevel);
         m_running = true;
@@ -88,6 +57,7 @@ namespace vovochka
         m_stats.power = m_stats.powerMax;
         m_stats.score = 0;
         m_intimacy = IntimacySession{};
+        m_bossIntimacy = IntimacySession{};
         m_laughTimer = 0.0f;
         m_exitActive = false;
         m_hurtTimer = 0.0f;
@@ -1137,6 +1107,11 @@ namespace vovochka
         }
 
         // === 2. Кирпичная панель ===
+        drawBar(Rectangle{154.0f + ox, 30.0f, 128.0f, 10.0f},
+                (float)m_stats.health / (float)m_stats.healthMax);
+        drawBar(Rectangle{297.0f + ox, 30.0f, 128.0f, 10.0f},
+                m_stats.score / 100.0f);
+
         if (const SpriteSheetGPU *pf = m_renderer.sheet("ProgressFon"))
         {
             Rectangle src = pf->frame(0);
@@ -1144,15 +1119,8 @@ namespace vovochka
             DrawTexturePro(pf->texture, src, dst, {0, 0}, 0.0f, WHITE);
         }
 
-        // === Шкалы ===
-        drawBar(Rectangle{152.0f + ox, 30.0f, 128.0f, 10.0f},
-                (float)m_stats.health / (float)m_stats.healthMax);
-        drawBar(Rectangle{298.0f + ox, 30.0f, 128.0f, 10.0f},
-                m_stats.score / 100.0f);
-
-        // === Цифры ===
-        DrawText(TextFormat("%d", m_stats.health), (int)(237.0f + ox), 8, 20, YELLOW);
-        DrawText(TextFormat("%d", (int)m_stats.score), (int)(380.0f + ox), 8, 20, YELLOW);
+        m_fontHud.draw(TextFormat("%d", m_stats.health), (int)(237.0f + ox), -3);
+        m_fontHud.draw(TextFormat("%d", (int)m_stats.score), (int)(380.0f + ox), -3);
 
         // === 3. Жизни (головы) ===
         if (const SpriteSheetGPU *ap = m_renderer.sheet("AttemptProgress"))

@@ -1,4 +1,5 @@
 #include "IniReader.h"
+#include "Utils.h"
 
 #include <algorithm>
 #include <cctype>
@@ -8,29 +9,6 @@
 
 namespace vovochka
 {
-
-    namespace
-    {
-
-        std::string trim(const std::string &s)
-        {
-            auto b = s.begin(), e = s.end();
-            while (b != e && std::isspace(static_cast<unsigned char>(*b)))
-                ++b;
-            while (e != b && std::isspace(static_cast<unsigned char>(*(e - 1))))
-                --e;
-            return std::string(b, e);
-        }
-
-        std::string toLower(std::string s)
-        {
-            std::transform(s.begin(), s.end(), s.begin(),
-                           [](unsigned char c)
-                           { return static_cast<char>(std::tolower(c)); });
-            return s;
-        }
-
-    } // namespace
 
     bool IniReader::loadFile(const std::string &path)
     {
@@ -70,7 +48,6 @@ namespace vovochka
                 continue;
             std::string k = trim(line.substr(0, eq));
             std::string v = trim(line.substr(eq + 1));
-            // ������� inline-����������� (������ ���� ����� ';' ������)
             auto sc = v.find(" ;");
             if (sc != std::string::npos)
                 v = trim(v.substr(0, sc));
@@ -99,7 +76,6 @@ namespace vovochka
             return def;
         try
         {
-            // ��������� hex-�������� ���� $FF00FF � 0xFF00FF
             std::string lv = toLower(*v);
             if (!lv.empty() && lv[0] == '$')
                 return static_cast<int>(std::stol(lv.substr(1), nullptr, 16));
@@ -132,7 +108,6 @@ namespace vovochka
         if (!v)
             return def;
         std::string lv = toLower(*v);
-        // Delphi cl* ����������� ����� (�������� ������)
         if (lv == "cllime")
             return 0x00FF00u;
         if (lv == "clfuchsia")

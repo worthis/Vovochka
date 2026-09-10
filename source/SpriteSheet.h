@@ -90,7 +90,6 @@ namespace vovochka
 
     private:
         std::unordered_map<std::string, SpriteSheetGPU> m_sheets;
-        static Color unpackColor(uint32_t rgb);
         static void computeVisibleBounds(SpriteSheetGPU& sheet, const Image& img);
     };
 

@@ -8,6 +8,7 @@
 #include "LevelExit.h"
 #include "InputSystem.h"
 #include "ConfigSystem.h"
+#include "FontSystem.h"
 #include "raylib.h"
 #include <unordered_map>
 
@@ -53,9 +54,9 @@ namespace vovochka
 
         struct Stats
         {
-            int health = 80, healthMax = 80; // Energy: 1 деление = 10
-            int power = 6, powerMax = 6;     // Progress1: 0 пусто, 1..6
-            float score = 0;                 // 0..100
+            int health = 8, healthMax = 8; // Energy
+            int power = 6, powerMax = 6;   // Progress1: 0 пусто, 1..6
+            float score = 0;               // 0..100
         };
 
         struct IntimacySession
@@ -98,6 +99,7 @@ namespace vovochka
         std::unordered_map<std::string, Sound> m_sounds;
         std::vector<Enemy> m_enemies;
         LevelExit m_levelExit;
+        BitmapFont m_fontHud;
 
         Sound m_stairsSound{};
         Sound m_moveSound{};
