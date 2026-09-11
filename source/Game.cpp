@@ -14,24 +14,18 @@ namespace vovochka
     Game::Game(std::string dataRoot) : m_dataRoot(std::move(dataRoot)) {}
     Game::~Game() { shutdown(); }
 
-    bool Game::init(int screenW, int screenH, const char *title)
+    bool Game::init()
     {
-        ConfigSystem::instance().loadSettings("settings.json");
-
-        SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
-        InitWindow(screenW, screenH, title);
-        InitAudioDevice();
-        SetTargetFPS(60);
-
         m_camera.zoom = 1.0f;
         m_camera.rotation = 0.0f;
-        m_camera.offset = {screenW * 0.5f, screenH * 0.5f};
+        m_camera.offset = {GetScreenWidth() * 0.5f, GetScreenHeight() * 0.5f};
         m_camera.target = {0, 0};
 
         m_fontHud.load(m_dataRoot + "/COMMON/FONT/Font6");
 
         setLevel(m_currentLevel);
         m_running = true;
+
         return true;
     }
 
@@ -41,9 +35,6 @@ namespace vovochka
         {
             m_renderer.unload();
             unloadSounds();
-            if (IsAudioDeviceReady())
-                CloseAudioDevice();
-            CloseWindow();
             m_running = false;
         }
     }
@@ -502,7 +493,7 @@ namespace vovochka
 
                 playSound("attak");
                 damagePlayer(1);
-                
+
                 if (!e.isClimbing())
                     e.startAttack(m_player.getPixelPos().x >= e.getPixelPos().x);
 
@@ -554,7 +545,6 @@ namespace vovochka
 
         BeginDrawing();
         ClearBackground(BLACK);
-
         BeginMode2D(m_camera);
 
         // --- Фон с параллаксом (рисуем в мировых координатах) ---

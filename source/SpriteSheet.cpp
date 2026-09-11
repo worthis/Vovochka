@@ -138,6 +138,10 @@ namespace vovochka
 
             SpriteSheetGPU gpu;
             gpu.texture = LoadTextureFromImage(img);
+            
+            SetTextureFilter(gpu.texture, isBackground ? TEXTURE_FILTER_BILINEAR
+                                                       : TEXTURE_FILTER_POINT);
+
             gpu.patternW = def.patternW;
             gpu.patternH = def.patternH;
             gpu.skipW = def.skipW;
