@@ -119,11 +119,11 @@ namespace vovochka
 
         if (IsGamepadAvailable(0))
         {
-            return isAnyGamepadButtonDown(keys.bomb.gamepad);
+            return isAnyGamepadButtonPressed(keys.bomb.gamepad);
         }
         else
         {
-            return isAnyKeyDown(keys.bomb.keyboard);
+            return isAnyKeyPressed(keys.bomb.keyboard);
         }
     }
 

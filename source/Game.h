@@ -1,4 +1,5 @@
 #pragma once
+
 #include "MapData.h"
 #include "LevelLoader.h"
 #include "LevelRenderer.h"
@@ -21,8 +22,11 @@ namespace vovochka
         explicit Game(std::string dataRoot);
         ~Game();
 
-        bool init(int screenW, int screenH, const char *title);
+        bool init();
         void run();
+        bool isRunning() const { return m_running; }
+        void update(float dt);
+        void render();
         void shutdown();
         void setLevel(int n); // 1..12
 
@@ -128,14 +132,12 @@ namespace vovochka
         void spawnEnemies();
         void spawnLevelExit();
 
-        void update(float dt);         // системный уровень: ввод, игрок, камера
         void updateGameplay(float dt); // игровая логика: предметы, враги, бомбы, близость
         void updateFootsteps();        // звуки шагов игрока
         void processSystemInput();     // отладка, смена уровня/сложности
         bool checkBombConditions();    // проверка условий создания бомбы
         void updateBombs(float dt);
         void updateCamera();
-        void render();
         void renderHUD();
 
         Rectangle getExplosionBounds(const Bomb &b, const SpriteSheetGPU *es, float tw, float th);
