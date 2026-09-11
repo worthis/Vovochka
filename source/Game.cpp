@@ -87,6 +87,7 @@ namespace vovochka
                       m_renderer.sheet("PlayerGo"),
                       m_renderer.sheet("PlayerMakeBomb"),
                       m_renderer.sheet("PlayerUndoAttack"),
+                      m_renderer.sheet("PlayerDestroing"),
                       tw, th, m_diff.playerSpeed * kSpeedScale);
 
         m_loader.loadDifficulty(m_difficulty, m_diff);
@@ -139,12 +140,11 @@ namespace vovochka
         const float sw = static_cast<float>(GetScreenWidth());
         const float sh = static_cast<float>(GetScreenHeight());
 
-        // актуальный offset каждый кадр (лечит «улёт» при ресайзе)
         m_camera.offset = {sw * 0.5f, sh * 0.5f};
 
         Vector2 p = m_player.getPixelPos();
-        float tx = p.x + 52.0f; // центр спрайта (~104/2)
-        float ty = p.y + 52.0f;
+        float tx = p.x + m_player.patW() * 0.5f;
+        float ty = p.y + m_player.patH() * 0.5f;
 
         if (mapW <= sw)
             tx = mapW * 0.5f;
@@ -249,7 +249,8 @@ namespace vovochka
         updateFootsteps();
 
         // Камера
-        updateCamera();
+        if (!m_player.isDying())
+            updateCamera();
 
         // Геймплей
         updateGameplay(dt);
@@ -280,6 +281,9 @@ namespace vovochka
 
     void Game::endIntimacy()
     {
+        if (!m_intimacy.active)
+            return;
+
         m_intimacy.active = false;
         auto &g = m_entities[m_intimacy.girlIdx];
         g.used = true;
@@ -303,17 +307,19 @@ namespace vovochka
         b.placeAt(m_player.getTileX(), m_player.getTileY());
         b.startAttack(b.isFacingRight(), true);
 
-        playSound("attak");
         playSound("KISS");
     }
 
     void Game::endBossIntimacy()
     {
+        if (!m_bossIntimacy.active)
+            return;
+
         m_bossIntimacy.active = false;
         m_bossGrabCooldown = kBossGrabCooldown;
         auto &b = m_enemies[m_bossIntimacy.girlIdx];
         b.stopAttack();
-        damagePlayer(1);
+
         playSound("PlayerCackle");
     }
 
@@ -333,7 +339,8 @@ namespace vovochka
             m_intimacy.active ||
             m_bossIntimacy.active ||
             m_player.isMakingBomb() ||
-            m_player.isHurt())
+            m_player.isHurt() ||
+            m_player.isDying())
         {
             return false;
         }
@@ -372,7 +379,8 @@ namespace vovochka
 
         // --- Подбор презервативов ---
         if (!m_intimacy.active &&
-            !m_bossIntimacy.active)
+            !m_bossIntimacy.active &&
+            !m_player.isDying())
         {
             const SpriteSheetGPU *cs = m_renderer.sheet("Condom");
             const float cw = cs ? (float)cs->patternW : 28.0f;
@@ -404,7 +412,8 @@ namespace vovochka
 
         // --- Девушки: попытка близости ---
         if (!m_intimacy.active &&
-            !m_bossIntimacy.active)
+            !m_bossIntimacy.active &&
+            !m_player.isDying())
         {
             for (size_t i = 0; i < m_entities.size(); ++i)
             {
@@ -418,8 +427,7 @@ namespace vovochka
                 if (!CheckCollisionRecs(pr, gr))
                     continue;
 
-                if (m_stats.power >= m_diff.playerStrengthCan &&
-                    !m_player.isHurt())
+                if (m_stats.power >= m_diff.playerStrengthCan)
                 {
                     startIntimacy(static_cast<int>(i));
                     break;
@@ -453,7 +461,8 @@ namespace vovochka
         if (m_deathTimer <= 0.0f &&
             m_hurtTimer <= 0.0f &&
             !m_bossIntimacy.active &&
-            !m_player.isHurt())
+            !m_player.isHurt() &&
+            !m_player.isDying())
         {
             for (size_t i = 0; i < m_enemies.size(); ++i)
             {
@@ -464,32 +473,38 @@ namespace vovochka
                 if (!CheckCollisionRecs(pr, e.getBounds()))
                     continue;
 
+                if (e.isBoss)
+                {
+                    if (m_bossGrabCooldown > 0.0f)
+                        continue;
+
+                    if (!m_player.isClimbing() &&
+                        !e.isClimbing())
+                    {
+                        endIntimacy();
+                        m_player.cancelMakeBomb();
+                        playSound("WNCE");
+                        damagePlayer(1);
+                        startBossIntimacy(static_cast<int>(i));
+                        break;
+                    }
+                    else
+                    {
+                        playSound("WNCE");
+                        damagePlayer(2);
+                    }
+
+                    continue;
+                }
+
+                endIntimacy();
                 m_player.cancelMakeBomb();
 
-                if (m_intimacy.active)
-                    endIntimacy();
-
-                if (e.isBoss &&
-                    m_bossGrabCooldown <= 0.0f &&
-                    m_stats.power > 0 &&
-                    !m_player.isClimbing() &&
-                    !e.isClimbing())
-                {
-                    startBossIntimacy(static_cast<int>(i));
-                }
-                else
-                {
-                    playSound("attak");
-
-                    damagePlayer(e.isBoss && m_player.isClimbing() ? 2 : 1);
-
-                    if (!m_player.isClimbing())
-                        m_player.startHurt();
-
-                    if (!e.isBoss &&
-                        !e.isClimbing())
-                        e.startAttack(m_player.getPixelPos().x >= e.getPixelPos().x);
-                }
+                playSound("attak");
+                damagePlayer(1);
+                
+                if (!e.isClimbing())
+                    e.startAttack(m_player.getPixelPos().x >= e.getPixelPos().x);
 
                 break;
             }
@@ -591,7 +606,8 @@ namespace vovochka
         // --- 6. Игрок (лезет по лестнице) ---
         if (!m_intimacy.active &&
             !m_bossIntimacy.active &&
-            m_player.isClimbing())
+            m_player.isClimbing() &&
+            !m_player.isDying())
             m_player.draw();
 
         // --- 7. Враги ---
@@ -603,9 +619,10 @@ namespace vovochka
         m_renderer.drawFrontLayer(m_map);
 
         // --- 9. Игрок (идет мимо лестницы) ---
-        if (!m_intimacy.active &&
-            !m_bossIntimacy.active &&
-            !m_player.isClimbing())
+        if ((!m_intimacy.active &&
+             !m_bossIntimacy.active &&
+             !m_player.isClimbing()) ||
+            m_player.isDying())
             m_player.draw();
 
         // --- 10. Враги (идет мимо лестницы) ---
@@ -1066,25 +1083,38 @@ namespace vovochka
 
     void Game::damagePlayer(int dmg)
     {
-        if (m_hurtTimer > 0.0f)
+        if (m_hurtTimer > 0.0f ||
+            m_player.isDying())
             return;
 
-        m_hurtTimer = 1.0f;
+        m_hurtTimer = 1.5f;
         m_stats.health -= dmg;
+
+        if (!m_player.isClimbing())
+            m_player.startHurt();
+
         if (m_stats.health <= 0)
         {
             m_stats.health = 0;
             killPlayer();
         }
-
-        playSound("WNCE");
     }
 
     void Game::killPlayer()
     {
+        if (m_player.isDying())
+            return;
+
         m_stats.health = 0;
-        m_deathTimer = 1.0f;
+        m_player.startDeath();
         playSound("Scream");
+
+        m_deathTimer = m_player.deathDuration() + 0.5f;
+
+        if (m_intimacy.active)
+            endIntimacy();
+        if (m_bossIntimacy.active)
+            endBossIntimacy();
     }
 
     void Game::renderHUD()

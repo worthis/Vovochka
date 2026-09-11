@@ -11,6 +11,7 @@ namespace vovochka
                       const SpriteSheetGPU *walkSheet,
                       const SpriteSheetGPU *makeBombSheet,
                       const SpriteSheetGPU *hurtSheet,
+                      const SpriteSheetGPU *deathSheet,
                       float tileW, float tileH, float speedPx)
     {
         // --- полный сброс состояния (критично при смене уровня) ---
@@ -27,6 +28,11 @@ namespace vovochka
 
         m_animHurt.sheet = hurtSheet;
         m_animHurt.frameTime = 0.08f;
+
+        m_animDeath.sheet = deathSheet;
+        m_animDeath.frameTime = 0.08f;
+        m_dying = false;
+        m_deathT = 0.0f;
 
         m_tileW = tileW;
         m_tileH = tileH;
@@ -96,6 +102,15 @@ namespace vovochka
     void Player::update(float dt, const LevelMap &map, int inX, int inY, bool wantBomb)
     {
         const int pw = patW();
+
+        if (m_dying)
+        {
+            m_deathT += dt;
+            m_animDeath.update(dt);
+            m_pos.x += m_deathVelX * dt;
+            m_pos.y += m_deathVelY * dt;
+            return;
+        }
 
         updateClimbing(map);
         updateTileChanging();
@@ -380,6 +395,12 @@ namespace vovochka
 
     void Player::draw() const
     {
+        if (m_dying)
+        {
+            m_animDeath.draw(m_pos.x, m_pos.y, false);
+            return;
+        }
+
         if (m_hurt)
         {
             m_animHurt.draw(m_pos.x, m_pos.y, false);
@@ -445,6 +466,38 @@ namespace vovochka
         const int half = m_animHurt.sheet->frameCount / 2;
         m_animHurt.setBlock(FrameBlock{m_facingRight ? 0 : half, half, false});
         m_hurtDuration = half * m_animHurt.frameTime;
+    }
+
+    void Player::startDeath()
+    {
+        if (m_dying)
+            return;
+
+        m_dying = true;
+        m_deathT = 0.0f;
+        m_deathDuration = 3.0f;
+        m_snapping = false;
+        m_dirX = m_dirY = 0;
+        m_makingBomb = false;
+        m_wantMakeBomb = false;
+        m_hurt = false;
+
+        // Две половины листа: 0..half-1 — вправо, half..end — влево; НЕ зациклена
+        if (m_animDeath.sheet && m_animDeath.sheet->frameCount >= 2)
+        {
+            const int half = m_animDeath.sheet->frameCount / 2;
+            m_animDeath.setBlock(FrameBlock{m_facingRight ? 0 : half, half, false});
+        }
+
+        // Падение под 45°: вниз + в сторону от взгляда
+        m_deathVelX = (m_facingRight ? -1.0f : 1.0f) * kDeathFallSpeed;
+        m_deathVelY = kDeathFallSpeed;
+    }
+
+    bool Player::isDeathFinished() const
+    {
+        return m_dying &&
+               m_deathT >= m_deathDuration;
     }
 
 } // namespace vovochka

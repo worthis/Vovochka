@@ -19,6 +19,8 @@ namespace vovochka
                   float tileW, float tileH);
 
         Rectangle getBounds() const override;
+        int patW() const override;
+        int patH() const override;
 
         void update(float dt, const LevelMap &map);
         void draw() const;
@@ -35,10 +37,6 @@ namespace vovochka
         int bombHits = 0;
         bool alive = true;
         bool isBoss = false;
-
-    protected:
-        int patW() const override;
-        int patH() const override;
 
     private:
         // A* pathfinding к цели

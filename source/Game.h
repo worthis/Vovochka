@@ -27,12 +27,12 @@ namespace vovochka
         void setLevel(int n); // 1..12
 
     private:
-        static constexpr float kSpeedScale = 2500.0f;
+        static constexpr float kSpeedScale = 3000.0f;
         static constexpr float kBombFuse = 1.2f;            // время фитиля бомбы
         static constexpr float kExplosionFrameTime = 0.05f; // время анимации взрыва
         static constexpr float kExplosionDy = -70.0f;       // положение анимации взрыва по оси Y
         static constexpr float kParallaxFactor = 0.3f;      // Параллакс фона: 0 = неподвижен, 1 = вместе с камерой
-        static constexpr float kBossGrabCooldown = 1.5f;    // кулдаун захвата 1500 мс
+        static constexpr float kBossGrabCooldown = 1.5f;    // кулдаун атаки босса 1500 мс
         static constexpr int kMinimapLineTh = 4;            // толщина линий карты, px
         static constexpr int kMinimapMarkerSize = 4;        // размер квадратиков-меток, px
 

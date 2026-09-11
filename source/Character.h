@@ -18,6 +18,8 @@ namespace vovochka
         int getTileY() const { return m_tileY; }
         virtual Rectangle getBounds() const;
         float getFeetY() const { return m_pos.y + patH(); }
+        virtual int patW() const = 0;
+        virtual int patH() const = 0;
 
         void placeAt(int tileX, int tileY);
 
@@ -54,9 +56,6 @@ namespace vovochka
         void updateClimbing(const LevelMap &map);
         void updateTileChanging();
         void moveTowardsSnap(float dt, const LevelMap &map);
-
-        virtual int patW() const = 0;
-        virtual int patH() const = 0;
     };
 
 } // namespace vovochka
