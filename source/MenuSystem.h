@@ -3,6 +3,7 @@
 #include "SpriteSheet.h"
 #include "FontSystem.h"
 #include "InputSystem.h"
+#include "VideoPlayer.h"
 #include "raylib.h"
 #include <string>
 #include <unordered_map>
@@ -60,10 +61,9 @@ namespace vovochka
         std::unordered_map<std::string, BitmapFont> m_fonts;
         std::unordered_map<std::string, Sound> m_menuSounds;
 
-        std::vector<int> m_videoFullSec;
-        int m_videoSelected = 0;
-        float m_videoTimer = 0.0f;
+        VideoPlayer m_videoPlayer;
 
+        std::vector<int> m_videoFullSec;
         bool m_quitRequested = false;
         bool m_startGameRequested = false;
         bool m_gameOverQuitting = false;

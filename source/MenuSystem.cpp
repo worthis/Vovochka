@@ -73,6 +73,8 @@ namespace vovochka
             m_backdrop = {};
         }
 
+        m_videoPlayer.close();
+
         m_videoGraphics.unload();
         m_menuGraphics.unload();
 
@@ -288,10 +290,10 @@ namespace vovochka
     {
         m_currentScreen = screen;
         m_selectedItem = 0;
+        m_gameMenuTimer = 0.0f;
 
         if (screen == MenuScreen::GameTitle)
         {
-            m_gameMenuTimer = 0.0f;
             playMenuSound("OnTitle");
         }
     }
@@ -380,7 +382,7 @@ namespace vovochka
 
         if (m_currentScreen == MenuScreen::Video)
         {
-            int sel = m_videoSelected;
+            int sel = m_selectedItem;
             if (input.isMenuLeftPressed())
                 sel = (sel + 11) % 12;
             else if (input.isMenuRightPressed())
@@ -389,38 +391,44 @@ namespace vovochka
                 sel = (sel + 8) % 12;
             else if (input.isMenuDownPressed())
                 sel = (sel + 4) % 12;
-            if (sel != m_videoSelected)
+            if (sel != m_selectedItem)
             {
-                m_videoSelected = sel;
+                m_selectedItem = sel;
                 playMenuSound("Move1");
             }
 
             if (input.isMenuConfirmPressed())
             {
-                m_videoTimer = 0.0f;
                 playMenuSound("Down1");
-                setScreen(MenuScreen::VideoWindow);
+
+                const std::string path = m_dataRoot + "/VIDEO/video" +
+                                         std::to_string(m_selectedItem + 1) + ".mpg";
+                const int avail = videoAvailSec(m_selectedItem);
+                if (avail > 0 && m_videoPlayer.open(path, (float)avail))
+                    setScreen(MenuScreen::VideoWindow);
+                else
+                    TraceLog(LOG_WARNING, "Video: unavailable or missing file");
             }
             else if (input.isMenuCancelPressed())
             {
                 playMenuSound("Down1");
                 setScreen(MenuScreen::Main);
             }
+
             return;
         }
 
         if (m_currentScreen == MenuScreen::VideoWindow)
         {
-            m_videoTimer += dt;
-            const int avail = videoAvailSec(m_videoSelected);
+            m_videoPlayer.update(dt);
 
-            // конец просмотра или выход
-            if (input.isMenuCancelPressed() ||
-                (avail > 0 && m_videoTimer >= (float)avail))
+            if (input.isMenuCancelPressed() || m_videoPlayer.finished())
             {
+                m_videoPlayer.close();
                 playMenuSound("Down1");
                 setScreen(MenuScreen::Video);
             }
+
             return;
         }
 
@@ -656,7 +664,7 @@ namespace vovochka
             const float fw = (float)font(kFontVideoFull).textWidth(fs);
             font(kFontVideoFull).draw(fs, x + cw - 2.0f - fw, y + 2.0f);
 
-            if (i == m_videoSelected)
+            if (i == m_selectedItem)
             {
                 selX = x;
                 selY = y;
@@ -677,25 +685,16 @@ namespace vovochka
         if (const SpriteSheetGPU *s = m_videoGraphics.get("FilmFon"))
             DrawTexturePro(s->texture, s->frame(0), Rectangle{0, 0, 800, 600}, {0, 0}, 0.0f, WHITE);
 
-        const int avail = videoAvailSec(m_videoSelected);
+        // Видео 512x384 по центру «экрана кинотеатра»
+        m_videoPlayer.draw(Rectangle{144.0f, 108.0f, 512.0f, 384.0f});
 
-        // ЗАГЛУШКА проигрывания: превью на "экране" кинотеатра.
-        // Сюда встанет настоящий плеер, когда найдём кадры роликов.
-        const std::string name = std::to_string(m_videoSelected + 1);
-        if (const SpriteSheetGPU *c = m_videoGraphics.get(name.c_str()))
-            DrawTexturePro(c->texture, c->frame(0), Rectangle{160, 90, 480, 360}, {0, 0}, 0.0f, WHITE);
-
-        if (avail <= 0)
+        // Прогресс: просмотрено / доступно
+        const float cap = m_videoPlayer.capSec();
+        if (cap > 0.0f)
         {
-            const char *msg = "НЕДОСТУПНО";
-            const BitmapFont &f = font(kFontMenu);
-            f.draw(msg, 400.0f - f.textWidth(msg) * 0.5f, 260.0f, WHITE);
-        }
-        else
-        {
-            const float frac = std::clamp(m_videoTimer / (float)avail, 0.0f, 1.0f);
-            DrawRectangle(160, 460, 480, 10, Color{40, 40, 40, 255});
-            DrawRectangle(160, 460, (int)(480.0f * frac), 10, Color{255, 0, 128, 255});
+            const float frac = std::clamp(m_videoPlayer.timePlayed() / cap, 0.0f, 1.0f);
+            DrawRectangle(144, 492, 512, 8, Color{30, 30, 30, 255});
+            DrawRectangle(144, 492, (int)(512.0f * frac), 8, Color{255, 64, 160, 255});
         }
 
         if (const SpriteSheetGPU *b = m_videoGraphics.get("BackBtn"))
