@@ -8,6 +8,8 @@ namespace vovochka
 
     void Player::init(const LevelMap &map,
                       const SpriteSheetGPU *standSheet,
+                      const SpriteSheetGPU *stand1Sheet,
+                      const SpriteSheetGPU *stand2Sheet,
                       const SpriteSheetGPU *walkSheet,
                       const SpriteSheetGPU *makeBombSheet,
                       const SpriteSheetGPU *hurtSheet,
@@ -60,11 +62,27 @@ namespace vovochka
         m_animStand.timer = 0.0f;
         m_animStand.frame = 0;
 
+        m_animStand1.sheet = stand1Sheet;
+        m_animStand1.setBlock(SpriteLayout::playerStand(true, stand1Sheet ? stand1Sheet->frameCount : 16));
+        m_animStand1.frameTime = 0.10f;
+        m_animStand1.timer = 0.0f;
+        m_animStand1.frame = 0;
+
+        m_animStand2.sheet = stand2Sheet;
+        m_animStand2.setBlock(SpriteLayout::playerStand(true, stand2Sheet ? stand2Sheet->frameCount : 16));
+        m_animStand2.frameTime = 0.10f;
+        m_animStand2.timer = 0.0f;
+        m_animStand2.frame = 0;
+
         m_animWalk.sheet = walkSheet;
         m_animWalk.setBlock(SpriteLayout::walk(SpriteLayout::WalkAnim::Right, walkSheet ? walkSheet->frameCount : 32));
         m_animWalk.frameTime = 0.10f;
         m_animWalk.timer = 0.0f;
         m_animWalk.frame = 0;
+
+        m_idleT = 0.0f;
+        m_idlePerforming = false;
+        m_idleSoundPending = -1;
 
         m_lastTileX = m_tileX;
         m_lastTileY = m_tileY;
@@ -111,6 +129,13 @@ namespace vovochka
             m_pos.y += m_deathVelY * dt;
             return;
         }
+
+        const bool standing = m_inputEnabled &&
+                              !m_dying && !m_hurt &&
+                              !m_makingBomb && !m_wantMakeBomb &&
+                              !isClimbing() && !m_snapping &&
+                              inX == 0 && inY == 0;
+        updateIdle(dt, standing);
 
         updateClimbing(map);
         updateTileChanging();
@@ -401,6 +426,13 @@ namespace vovochka
             return;
         }
 
+        if (m_idlePerforming)
+        {
+            const Animation &a = (m_idleVariant == 1) ? m_animStand1 : m_animStand2;
+            a.draw(m_pos.x, m_pos.y, false);
+            return;
+        }
+
         if (m_hurt)
         {
             m_animHurt.draw(m_pos.x, m_pos.y, false);
@@ -498,6 +530,66 @@ namespace vovochka
     {
         return m_dying &&
                m_deathT >= m_deathDuration;
+    }
+
+    void Player::updateIdle(float dt, bool standing)
+    {
+        if (!standing)
+        {
+            endIdle();
+            return;
+        }
+
+        if (m_idlePerforming)
+        {
+            Animation &a = (m_idleVariant == 1) ? m_animStand1 : m_animStand2;
+            m_idlePerformT += dt;
+            a.update(dt);
+            if (m_idlePerformT >= m_idlePerformDuration)
+                endIdle();
+            return;
+        }
+
+        m_idleT += dt;
+        if (m_idleT >= kIdleDelay)
+            startIdle();
+    }
+
+    void Player::startIdle()
+    {
+        m_idleVariant = GetRandomValue(0, 2);
+        m_idleSoundPending = m_idleVariant;
+        m_idleT = 0.0f;
+
+        Animation *a = (m_idleVariant == 1)   ? &m_animStand1
+                       : (m_idleVariant == 2) ? &m_animStand2
+                                              : nullptr;
+
+        if (a && a->sheet && a->sheet->frameCount > 0)
+        {
+            const int half = a->sheet->frameCount / 2;
+            a->setBlock(FrameBlock{m_facingRight ? 0 : half, half, false});
+            m_idlePerformDuration = half * a->frameTime;
+            m_idlePerformT = 0.0f;
+            m_idlePerforming = true;
+        }
+    }
+
+    void Player::endIdle()
+    {
+        m_idlePerforming = false;
+        m_idleT = 0.0f;
+    }
+
+    bool Player::popIdleSound(int &variant)
+    {
+        if (m_idleSoundPending < 0)
+            return false;
+
+        variant = m_idleSoundPending;
+        m_idleSoundPending = -1;
+
+        return true;
     }
 
 } // namespace vovochka

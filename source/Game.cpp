@@ -77,6 +77,8 @@ namespace vovochka
 
         m_player.init(m_map,
                       m_renderer.sheet("PlayerStand0"),
+                      m_renderer.sheet("PlayerStand1"),
+                      m_renderer.sheet("PlayerStand2"),
                       m_renderer.sheet("PlayerGo"),
                       m_renderer.sheet("PlayerMakeBomb"),
                       m_renderer.sheet("PlayerUndoAttack"),
@@ -237,6 +239,10 @@ namespace vovochka
         // Обновление игрока с вводом
         m_player.setInputEnabled(!m_intimacy.active && !m_bossIntimacy.active && m_deathTimer <= 0.0f);
         m_player.update(dt, m_map, m_input.getMoveX(), m_input.getMoveY(), wantBomb);
+
+        int idleVariant = -1;
+        if (m_player.popIdleSound(idleVariant))
+            playSound(TextFormat("Stand%d", idleVariant));
 
         // Обновление звуков шагов
         updateFootsteps();
@@ -1053,7 +1059,7 @@ namespace vovochka
     void Game::nextLevel()
     {
         playSound("LevelComplete");
-        
+
         SaveSystem::instance().submitLevelScore(m_currentLevel, (int)m_stats.score);
 
         if (m_currentLevel >= 12)

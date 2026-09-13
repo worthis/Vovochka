@@ -12,6 +12,8 @@ namespace vovochka
     public:
         void init(const LevelMap &map,
                   const SpriteSheetGPU *standSheet,
+                  const SpriteSheetGPU *stand1Sheet,
+                  const SpriteSheetGPU *stand2Sheet,
                   const SpriteSheetGPU *walkSheet,
                   const SpriteSheetGPU *makeBombSheet,
                   const SpriteSheetGPU *hurtSheet,
@@ -34,22 +36,24 @@ namespace vovochka
         void cancelMakeBomb();
         bool isMakingBomb() const { return m_makingBomb || m_wantMakeBomb; }
         bool popMakeBombFinished();
+        bool popIdleSound(int &variant);
         void startHurt();
         bool isHurt() const { return m_hurt; }
 
     private:
         static constexpr float kDeathFallSpeed = 300.0f;
-
-        bool m_inputEnabled = true;
+        static constexpr float kIdleDelay = 1.5f;
 
         Animation m_animStand;
+        Animation m_animStand1;
+        Animation m_animStand2;
         Animation m_animWalk;
         Animation m_animBomb;
         Animation m_animHurt;
         Animation m_animDeath;
-
         SpriteLayout::WalkAnim m_currentWalkAnim = SpriteLayout::WalkAnim::Right;
 
+        bool m_inputEnabled = true;
         bool m_makingBomb = false;
         float m_makeBombT = 0.0f;
         float m_makeBombDuration = 0.0f;
@@ -63,8 +67,16 @@ namespace vovochka
         float m_deathT = 0.0f;
         float m_deathDuration = 0.0f;
         float m_deathVelX = 0.0f, m_deathVelY = 0.0f;
+        float m_idleT = 0.0f;
+        float m_idlePerformT = 0.0f;
+        float m_idlePerformDuration = 0.0f;
+        bool m_idlePerforming = false;
+        int m_idleVariant = 0;
+        int m_idleSoundPending = -1;
 
-        Rectangle offsetBounds(const Animation &anim) const;
+        void updateIdle(float dt, bool standing);
+        void startIdle();
+        void endIdle();
         void beginBombAnim();
         void switchWalkAnim(int dirX, int dirY);
         void switchToStandAnim();
@@ -72,6 +84,7 @@ namespace vovochka
         void checkTileCrossing(const LevelMap &map);
         void startForwardSnap(const LevelMap &map);
         SpriteLayout::WalkAnim directionToWalkAnim(int dx, int dy) const;
+        Rectangle offsetBounds(const Animation &anim) const;
     };
 
 } // namespace vovochka
