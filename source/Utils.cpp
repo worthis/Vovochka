@@ -5,6 +5,52 @@
 
 namespace vovochka
 {
+    bool parseInt(const std::string &s, int &out, int base)
+    {
+        if (s.empty())
+            return false;
+        errno = 0;
+        char *end = nullptr;
+        const long v = std::strtol(s.c_str(), &end, base);
+        if (errno == ERANGE || end == s.c_str())
+            return false;
+        while (*end != '\0' && std::isspace((unsigned char)*end))
+            ++end;
+        if (*end != '\0')
+            return false;
+        out = (int)v;
+        return true;
+    }
+
+    bool parseFloat(const std::string &s, float &out)
+    {
+        if (s.empty())
+            return false;
+        errno = 0;
+        char *end = nullptr;
+        const double v = std::strtod(s.c_str(), &end);
+        if (errno == ERANGE || end == s.c_str())
+            return false;
+        while (*end != '\0' && std::isspace((unsigned char)*end))
+            ++end;
+        if (*end != '\0')
+            return false;
+        out = (float)v;
+        return true;
+    }
+
+    int parseIntOr(const std::string &s, int def, int base)
+    {
+        int v = def;
+        return parseInt(s, v, base) ? v : def;
+    }
+
+    float parseFloatOr(const std::string &s, float def)
+    {
+        float v = def;
+        return parseFloat(s, v) ? v : def;
+    }
+
     std::string trim(const std::string &s)
     {
         size_t b = s.find_first_not_of(" \t\r\n");

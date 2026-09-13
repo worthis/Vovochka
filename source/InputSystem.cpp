@@ -68,15 +68,15 @@ namespace vovochka
             float stickY = GetGamepadAxisMovement(0, GAMEPAD_AXIS_LEFT_Y);
 
             if (fabsf(stickX) > DEADZONE)
-                moveX -= (stickX > 0.0f) ? 1 : -1;
+                moveX += (stickX > 0.0f) ? 1 : -1;
             if (fabsf(stickY) > DEADZONE)
                 moveY -= (stickY > 0.0f) ? 1 : -1;
 
             // D-pad
             if (isAnyGamepadButtonDown(keys.moveLeft.gamepad))
-                moveX += 1;
-            if (isAnyGamepadButtonDown(keys.moveRight.gamepad))
                 moveX -= 1;
+            if (isAnyGamepadButtonDown(keys.moveRight.gamepad))
+                moveX += 1;
             if (isAnyGamepadButtonDown(keys.moveUp.gamepad))
                 moveY -= 1;
             if (isAnyGamepadButtonDown(keys.moveDown.gamepad))

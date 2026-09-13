@@ -8,6 +8,11 @@
 
 namespace vovochka
 {
+    bool parseInt(const std::string &s, int &out, int base = 10);
+    bool parseFloat(const std::string &s, float &out);
+    int parseIntOr(const std::string &s, int def, int base = 10);
+    float parseFloatOr(const std::string &s, float def);
+
     // Удаление пробелов, символов табуляции и переноса строки в начале и в конце строки
     std::string trim(const std::string &s);
 

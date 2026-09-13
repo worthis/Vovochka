@@ -1,6 +1,5 @@
 #include "IniReader.h"
 #include "Utils.h"
-
 #include <algorithm>
 #include <cctype>
 #include <fstream>
@@ -32,7 +31,6 @@ namespace vovochka
             if (line.empty())
                 continue;
 
-            // BOM-strip � �����������
             if (line[0] == ';' || line[0] == '#')
                 continue;
 
@@ -74,19 +72,19 @@ namespace vovochka
         auto v = get(s, k);
         if (!v)
             return def;
-        try
-        {
-            std::string lv = toLower(*v);
-            if (!lv.empty() && lv[0] == '$')
-                return static_cast<int>(std::stol(lv.substr(1), nullptr, 16));
-            if (lv.size() > 2 && lv[0] == '0' && lv[1] == 'x')
-                return static_cast<int>(std::stol(lv.substr(2), nullptr, 16));
-            return std::stoi(*v);
-        }
-        catch (...)
-        {
-            return def;
-        }
+
+        const std::string lv = toLower(*v);
+
+        // $hex (Delphi-формат)
+        if (!lv.empty() && lv[0] == '$')
+            return parseIntOr(lv.substr(1), def, 16);
+
+        // 0x hex
+        if (lv.size() > 2 && lv[0] == '0' && lv[1] == 'x')
+            return parseIntOr(lv.substr(2), def, 16);
+
+        // десятичное
+        return parseIntOr(lv, def, 10);
     }
 
     bool IniReader::getBool(const std::string &s, const std::string &k, bool def) const
@@ -94,11 +92,13 @@ namespace vovochka
         auto v = get(s, k);
         if (!v)
             return def;
+
         std::string lv = toLower(*v);
         if (lv == "1" || lv == "true" || lv == "yes" || lv == "on")
             return true;
         if (lv == "0" || lv == "false" || lv == "no" || lv == "off")
             return false;
+
         return def;
     }
 
@@ -107,6 +107,7 @@ namespace vovochka
         auto v = get(s, k);
         if (!v)
             return def;
+
         std::string lv = toLower(*v);
         if (lv == "cllime")
             return 0x00FF00u;
@@ -132,18 +133,16 @@ namespace vovochka
             return 0x808080u;
         if (lv == "clsilver")
             return 0xC0C0C0u;
+
         // hex: $RRGGBB
         if (!lv.empty() && lv[0] == '$')
         {
-            try
-            {
-                return static_cast<uint32_t>(std::stoul(lv.substr(1), nullptr, 16));
-            }
-            catch (...)
-            {
-                return def;
-            }
+            int n = 0;
+            if (parseInt(lv.substr(1), n, 16))
+                return static_cast<uint32_t>(n);
+            return def;
         }
+
         return def;
     }
 
@@ -152,14 +151,8 @@ namespace vovochka
         auto v = get(s, k);
         if (!v)
             return def;
-        try
-        {
-            return std::stof(*v);
-        }
-        catch (...)
-        {
-            return def;
-        }
+
+        return parseFloatOr(*v, def);
     }
 
     std::vector<std::string> IniReader::sections() const
