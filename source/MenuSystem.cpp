@@ -1,4 +1,6 @@
 #include "MenuSystem.h"
+#include "IniReader.h"
+#include "SaveSystem.h"
 #include "Utils.h"
 #include <cmath>
 
@@ -6,6 +8,8 @@ namespace vovochka
 {
     static const char *kFontMenu = "Font2";
     static const char *kFontMenuSel = "Font21";
+    static const char *kFontVideoAvail = "Font1";
+    static const char *kFontVideoFull = "Font4";
     static constexpr float kFonW = 800.0f;
     static constexpr float kFonH = 600.0f;
     static constexpr float kFonInset = 1.0f;                 // срезаем по 1 px с каждой стороны
@@ -16,7 +20,7 @@ namespace vovochka
 
     static const std::pair<const char *, MenuScreen> kMainItems[5] = {
         {"Играть", MenuScreen::Difficulty},
-        {"Видео", MenuScreen::Main},
+        {"Видео", MenuScreen::Video},
         {"Рекорды", MenuScreen::Main},
         {"Настройки", MenuScreen::Main},
         {"Выход", MenuScreen::Exit},
@@ -47,6 +51,8 @@ namespace vovochka
                 m_fonts.emplace(n, std::move(f));
         }
 
+        loadVideoGraphics();
+        loadVideoDurations();
         loadMenuGraphics();
         loadMenuSounds();
 
@@ -67,6 +73,7 @@ namespace vovochka
             m_backdrop = {};
         }
 
+        m_videoGraphics.unload();
         m_menuGraphics.unload();
 
         for (auto &[name, f] : m_fonts)
@@ -76,6 +83,39 @@ namespace vovochka
         for (auto &[name, s] : m_menuSounds)
             UnloadSound(s);
         m_menuSounds.clear();
+    }
+
+    void MenuSystem::loadVideoGraphics()
+    {
+        for (const char *dir : {"VIDEO", "VIDEOWINDOW"})
+        {
+            auto p = resolveDirCI(m_dataRoot, {"MENU", dir});
+            if (p.empty())
+                continue;
+            std::error_code ec;
+            for (auto &e : std::filesystem::directory_iterator(p, ec))
+            {
+                if (ec)
+                    break;
+                if (e.is_regular_file() && toLower(e.path().extension().string()) == ".dat")
+                {
+                    m_videoGraphics.loadFromIni(e.path().string(), p.string());
+                    break;
+                }
+            }
+        }
+    }
+
+    void MenuSystem::loadVideoDurations()
+    {
+        IniReader ini;
+        const std::string path = m_dataRoot + "/COMMON/GAMECONFIGINF/VideoDuration.dat";
+        if (!ini.loadFile(path))
+            return;
+
+        m_videoFullSec.assign(12, 0);
+        for (int i = 1; i <= 12; ++i)
+            m_videoFullSec[i - 1] = ini.getInt("1", std::to_string(i), 0);
     }
 
     void MenuSystem::loadMenuGraphics()
@@ -338,6 +378,52 @@ namespace vovochka
             return;
         }
 
+        if (m_currentScreen == MenuScreen::Video)
+        {
+            int sel = m_videoSelected;
+            if (input.isMenuLeftPressed())
+                sel = (sel + 11) % 12;
+            else if (input.isMenuRightPressed())
+                sel = (sel + 1) % 12;
+            else if (input.isMenuUpPressed())
+                sel = (sel + 8) % 12;
+            else if (input.isMenuDownPressed())
+                sel = (sel + 4) % 12;
+            if (sel != m_videoSelected)
+            {
+                m_videoSelected = sel;
+                playMenuSound("Move1");
+            }
+
+            if (input.isMenuConfirmPressed())
+            {
+                m_videoTimer = 0.0f;
+                playMenuSound("Down1");
+                setScreen(MenuScreen::VideoWindow);
+            }
+            else if (input.isMenuCancelPressed())
+            {
+                playMenuSound("Down1");
+                setScreen(MenuScreen::Main);
+            }
+            return;
+        }
+
+        if (m_currentScreen == MenuScreen::VideoWindow)
+        {
+            m_videoTimer += dt;
+            const int avail = videoAvailSec(m_videoSelected);
+
+            // конец просмотра или выход
+            if (input.isMenuCancelPressed() ||
+                (avail > 0 && m_videoTimer >= (float)avail))
+            {
+                playMenuSound("Down1");
+                setScreen(MenuScreen::Video);
+            }
+            return;
+        }
+
         if (m_currentScreen == MenuScreen::Exit)
         {
             // Горизонтальный выбор из двух пунктов
@@ -444,6 +530,12 @@ namespace vovochka
         case MenuScreen::Difficulty:
             drawDifficultyMenu();
             break;
+        case MenuScreen::Video:
+            drawVideoMenu();
+            break;
+        case MenuScreen::VideoWindow:
+            drawVideoWindow();
+            break;
         case MenuScreen::Exit:
             drawExitMenu();
             break;
@@ -473,12 +565,12 @@ namespace vovochka
         constexpr float kFirstY = 180.0f;
         constexpr float kLineH = 44.0f;
 
-        for (int i = 0; i < 5; ++i)
+        for (int i = 0; i < (int)std::size(kMainItems); ++i)
         {
             const BitmapFont &f = (i == m_selectedItem) ? font(kFontMenuSel) : font(kFontMenu);
             const float y = kFirstY + i * kLineH;
             const float w = (float)f.textWidth(kMainItems[i].first);
-            f.draw(kMainItems[i].first, kCenterX - w * 0.5f, y, WHITE);
+            f.draw(kMainItems[i].first, kCenterX - w * 0.5f, y);
         }
     }
 
@@ -491,7 +583,7 @@ namespace vovochka
             const BitmapFont &f = (i == m_selectedDifficulty - 1) ? font(kFontMenuSel) : font(kFontMenu);
             const float y = 237.0f + i * 50.0f;
             const float w = (float)f.textWidth(kDifficultyLabels[i]);
-            f.draw(kDifficultyLabels[i], 400.0f - w * 0.5f, y, WHITE);
+            f.draw(kDifficultyLabels[i], 400.0f - w * 0.5f, y);
         }
 
         // Кнопка "назад" в левом нижнем углу (кадр 0 = обычное состояние)
@@ -517,13 +609,13 @@ namespace vovochka
         const float kExitOptCX[2] = {200.0f, 605.0f};
         const BitmapFont &f = font(kFontMenu);
         const float w = (float)f.textWidth(title);
-        f.draw(title, 400.0f - w * 0.5f, 90.0f, WHITE);
+        f.draw(title, 400.0f - w * 0.5f, 90.0f);
 
         for (int i = 0; i < 2; ++i)
         {
             const BitmapFont &f = (i == m_selectedItem) ? font(kFontMenuSel) : font(kFontMenu);
             const float w = (float)f.textWidth(kExitOptLabels[i]);
-            f.draw(kExitOptLabels[i], kExitOptCX[i] - w * 0.5f, 190.0f, WHITE);
+            f.draw(kExitOptLabels[i], kExitOptCX[i] - w * 0.5f, 190.0f);
         }
     }
 
@@ -537,6 +629,81 @@ namespace vovochka
         }
     }
 
+    void MenuSystem::drawVideoMenu()
+    {
+        if (const SpriteSheetGPU *s = m_videoGraphics.get("FilmMenu"))
+            DrawTexturePro(s->texture, s->frame(0), Rectangle{0, 0, 800, 600}, {0, 0}, 0.0f, WHITE);
+
+        const float gx = 170.0f, gy = 113.0f, cw = 115.0f, ch = 111.0f;
+        float selX = gx, selY = gy;
+
+        for (int i = 0; i < 12; ++i)
+        {
+            const float x = gx + (i % 4) * cw;
+            const float y = gy + (i / 4) * ch;
+
+            // превью уровня (секции "1".."12" в VideoMenu.dat)
+            const std::string name = std::to_string(i + 1);
+            if (const SpriteSheetGPU *c = m_videoGraphics.get(name.c_str()))
+                DrawTexturePro(c->texture, c->frame(0), Rectangle{x, y, cw, ch}, {0, 0}, 0.0f, WHITE);
+
+            // времена: розовое = доступно, голубое = полное
+            const int full = (i < (int)m_videoFullSec.size()) ? m_videoFullSec[i] : 0;
+            const int avail = videoAvailSec(i);
+
+            font(kFontVideoAvail).draw(formatTime(avail), x + 2.0f, y + 2.0f);
+            const std::string fs = formatTime(full);
+            const float fw = (float)font(kFontVideoFull).textWidth(fs);
+            font(kFontVideoFull).draw(fs, x + cw - 2.0f - fw, y + 2.0f);
+
+            if (i == m_videoSelected)
+            {
+                selX = x;
+                selY = y;
+            }
+        }
+
+        DrawRectangleLinesEx(Rectangle{selX - 2.0f, selY - 2.0f, cw + 4.0f, ch + 4.0f}, 3.0f, PINK);
+
+        // локальная кнопка "Выход"
+        if (const SpriteSheetGPU *b = m_videoGraphics.get("BackBtn"))
+            DrawTexturePro(b->texture, b->frame(0),
+                           Rectangle{35.0f, 365.0f, (float)b->patternW, (float)b->patternH},
+                           {0, 0}, 0.0f, WHITE);
+    }
+
+    void MenuSystem::drawVideoWindow()
+    {
+        if (const SpriteSheetGPU *s = m_videoGraphics.get("FilmFon"))
+            DrawTexturePro(s->texture, s->frame(0), Rectangle{0, 0, 800, 600}, {0, 0}, 0.0f, WHITE);
+
+        const int avail = videoAvailSec(m_videoSelected);
+
+        // ЗАГЛУШКА проигрывания: превью на "экране" кинотеатра.
+        // Сюда встанет настоящий плеер, когда найдём кадры роликов.
+        const std::string name = std::to_string(m_videoSelected + 1);
+        if (const SpriteSheetGPU *c = m_videoGraphics.get(name.c_str()))
+            DrawTexturePro(c->texture, c->frame(0), Rectangle{160, 90, 480, 360}, {0, 0}, 0.0f, WHITE);
+
+        if (avail <= 0)
+        {
+            const char *msg = "НЕДОСТУПНО";
+            const BitmapFont &f = font(kFontMenu);
+            f.draw(msg, 400.0f - f.textWidth(msg) * 0.5f, 260.0f, WHITE);
+        }
+        else
+        {
+            const float frac = std::clamp(m_videoTimer / (float)avail, 0.0f, 1.0f);
+            DrawRectangle(160, 460, 480, 10, Color{40, 40, 40, 255});
+            DrawRectangle(160, 460, (int)(480.0f * frac), 10, Color{255, 0, 128, 255});
+        }
+
+        if (const SpriteSheetGPU *b = m_videoGraphics.get("BackBtn"))
+            DrawTexturePro(b->texture, b->frame(0),
+                           Rectangle{35.0f, 365.0f, (float)b->patternW, (float)b->patternH},
+                           {0, 0}, 0.0f, WHITE);
+    }
+
     void MenuSystem::playMenuSound(const std::string &name)
     {
         auto it = m_menuSounds.find(toLower(name));
@@ -548,6 +715,24 @@ namespace vovochka
     {
         m_quitRequested = false;
         m_startGameRequested = false;
+    }
+
+    int MenuSystem::videoAvailSec(int idx) const
+    {
+        if (idx < 0 || idx >= 12 || idx >= (int)m_videoFullSec.size())
+            return 0;
+
+        // Доступное время считаем из ЛУЧШИХ очков уровня из save-файла
+        const int score = SaveSystem::instance().levelScore(idx + 1);
+        return (m_videoFullSec[idx] * score + 99) / 100; // реконструкция: ceil(full*score/100)
+    }
+
+    std::string MenuSystem::formatTime(int sec)
+    {
+        char buf[16];
+        const char *kTimeFormat = "%d:%02d";
+        std::snprintf(buf, sizeof(buf), kTimeFormat, sec / 60, sec % 60);
+        return buf;
     }
 
 } // namespace vovochka

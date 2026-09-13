@@ -17,6 +17,8 @@ namespace vovochka
         Main,
         Difficulty,
         Options,
+        Video,
+        VideoWindow,
         InGame,
         Pause,
         GameOver,
@@ -54,8 +56,13 @@ namespace vovochka
         int m_backdropW = 0, m_backdropH = 0;
 
         SpriteSheetManager m_menuGraphics;
+        SpriteSheetManager m_videoGraphics;
         std::unordered_map<std::string, BitmapFont> m_fonts;
         std::unordered_map<std::string, Sound> m_menuSounds;
+
+        std::vector<int> m_videoFullSec;
+        int m_videoSelected = 0;
+        float m_videoTimer = 0.0f;
 
         bool m_quitRequested = false;
         bool m_startGameRequested = false;
@@ -66,6 +73,8 @@ namespace vovochka
 
         void loadMenuGraphics();
         void loadMenuSounds();
+        void loadVideoGraphics();
+        void loadVideoDurations();
         const BitmapFont &font(const char *name) const;
         void updateBackdrop(int sw, int sh);
         void drawFon();
@@ -74,9 +83,13 @@ namespace vovochka
         void drawGameTitle();
         void drawMainMenu();
         void drawDifficultyMenu();
+        void drawVideoMenu();
+        void drawVideoWindow();
         void drawExitMenu();
         void drawGameOver();
         void playMenuSound(const std::string &name);
+        int videoAvailSec(int idx) const;
+        static std::string formatTime(int sec);
     };
 
 } // namespace vovochka

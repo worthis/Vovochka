@@ -1,4 +1,6 @@
 #include "MenuSystem.h"
+#include "ConfigSystem.h"
+#include "SaveSystem.h"
 #include "Game.h"
 #include <cstdio>
 
@@ -20,6 +22,7 @@ int main(int argc, char **argv)
     SetTargetFPS(60);
 
     ConfigSystem::instance().loadSettings("settings.json");
+    vovochka::SaveSystem::instance().load("save.json");
 
     vovochka::MenuSystem menu(dataRoot);
     menu.init();

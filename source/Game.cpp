@@ -1,5 +1,6 @@
 #include "Game.h"
 #include "Utils.h"
+#include "SaveSystem.h"
 #include "SpriteLayout.h"
 #include "InputSystem.h"
 #include "ConfigSystem.h"
@@ -1052,6 +1053,8 @@ namespace vovochka
     void Game::nextLevel()
     {
         playSound("LevelComplete");
+        
+        SaveSystem::instance().submitLevelScore(m_currentLevel, (int)m_stats.score);
 
         if (m_currentLevel >= 12)
         {
