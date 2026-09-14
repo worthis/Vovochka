@@ -23,6 +23,7 @@ int main(int argc, char **argv)
 
     ConfigSystem::instance().loadSettings("settings.json");
     vovochka::SaveSystem::instance().load("save.json");
+    vovochka::SaveSystem::instance().loadVideoDurations(dataRoot);
 
     vovochka::MenuSystem menu(dataRoot);
     menu.init();

@@ -1060,7 +1060,7 @@ namespace vovochka
     {
         playSound("LevelComplete");
 
-        SaveSystem::instance().submitLevelScore(m_currentLevel, (int)m_stats.score);
+        SaveSystem::instance().submitLevelScore(m_currentLevel, (int)m_stats.score, m_difficulty);
 
         if (m_currentLevel >= 12)
         {

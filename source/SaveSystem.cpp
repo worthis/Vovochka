@@ -1,4 +1,5 @@
 #include "SaveSystem.h"
+#include "IniReader.h"
 #include <algorithm>
 #include <fstream>
 #include "third_party/json.hpp"
@@ -25,12 +26,12 @@ namespace vovochka
         json j;
         f >> j;
 
-        if (j.contains("levelScores") && j["levelScores"].is_array())
+        if (j.contains("videoAvailSec") && j["videoAvailSec"].is_array())
         {
-            const auto &arr = j["levelScores"];
+            const auto &arr = j["videoAvailSec"];
             for (int i = 0; i < 12 && i < (int)arr.size(); ++i)
                 if (arr[i].is_number_integer())
-                    m_levelScores[i] = std::clamp(arr[i].get<int>(), 0, 100);
+                    m_videoAvailSec[i] = arr[i].get<int>();
         }
 
         TraceLog(LOG_INFO, "Save loaded from %s", path.c_str());
@@ -45,8 +46,8 @@ namespace vovochka
         json j;
         json arr = json::array();
         for (int i = 0; i < 12; ++i)
-            arr.push_back(m_levelScores[i]);
-        j["levelScores"] = arr;
+            arr.push_back(m_videoAvailSec[i]);
+        j["videoAvailSec"] = arr;
 
         std::ofstream f(m_path);
         if (f.is_open())
@@ -65,16 +66,38 @@ namespace vovochka
         return (lvl >= 1 && lvl <= 12) ? m_levelScores[lvl - 1] : 0;
     }
 
-    void SaveSystem::submitLevelScore(int lvl, int score)
+    int SaveSystem::videoAvailSec(int video) const
+    {
+        return (video >= 1 && video <= 12) ? m_videoAvailSec[video - 1] : 0;
+    }
+
+    int SaveSystem::videoFullSec(int video) const
+    {
+        return (video >= 1 && video <= 12) ? m_videoFullSec[video - 1] : 0;
+    }
+
+    void SaveSystem::submitLevelScore(int lvl, int score, int difficulty)
     {
         if (lvl < 1 || lvl > 12)
             return;
 
-        const int sc = std::clamp(score, 0, 100);
-        if (sc > m_levelScores[lvl - 1]) // сохраняем только улучшение
+        const long long num = (long long)m_videoFullSec[lvl - 1] * score * difficulty;
+        const int sc = (int)((num + 299) / 300);
+        if (sc > m_videoAvailSec[lvl - 1])
         {
-            m_levelScores[lvl - 1] = sc;
-            save(); // сразу в файл
+            m_videoAvailSec[lvl - 1] = sc;
+            save();
         }
+    }
+
+    void SaveSystem::loadVideoDurations(const std::string &dataRoot)
+    {
+        IniReader ini;
+        const std::string path = dataRoot + "/COMMON/GAMECONFIGINF/VideoDuration.dat";
+        if (!ini.loadFile(path))
+            return;
+
+        for (int i = 1; i <= 12; ++i)
+            m_videoFullSec[i - 1] = ini.getInt("1", std::to_string(i), 0);
     }
 }

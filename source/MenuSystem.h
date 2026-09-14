@@ -63,7 +63,6 @@ namespace vovochka
 
         VideoPlayer m_videoPlayer;
 
-        std::vector<int> m_videoFullSec;
         bool m_quitRequested = false;
         bool m_startGameRequested = false;
         bool m_gameOverQuitting = false;
@@ -74,7 +73,6 @@ namespace vovochka
         void loadMenuGraphics();
         void loadMenuSounds();
         void loadVideoGraphics();
-        void loadVideoDurations();
         const BitmapFont &font(const char *name) const;
         void updateBackdrop(int sw, int sh);
         void drawFon();
@@ -88,7 +86,6 @@ namespace vovochka
         void drawExitMenu();
         void drawGameOver();
         void playMenuSound(const std::string &name);
-        int videoAvailSec(int idx) const;
         static std::string formatTime(int sec);
     };
 

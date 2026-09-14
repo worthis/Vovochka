@@ -1,8 +1,6 @@
 #include "VideoPlayer.h"
-
 #define PL_MPEG_IMPLEMENTATION
 #include "third_party/pl_mpeg.h"
-
 #include <cstring>
 
 VideoPlayer::~VideoPlayer()
@@ -30,10 +28,19 @@ bool VideoPlayer::open(const std::string &mpgPath, float capSec)
 
     const int w = plm_get_width(m_plm);
     const int h = plm_get_height(m_plm);
+    if (w <= 0 || h <= 0)
+    {
+        plm_destroy(m_plm);
+        m_plm = nullptr;
+        return false;
+    }
+
     m_stride = w * 3;
     m_rgb.assign((size_t)w * h * 3, 0);
+    m_nextRgb.assign((size_t)w * h * 3, 0);
+    m_nextTime = -1.0f;
+    m_videoEnded = false;
 
-    // Текстура поверх нашего буфера: пример делает то же самое
     Image img{};
     img.width = w;
     img.height = h;
@@ -44,21 +51,77 @@ bool VideoPlayer::open(const std::string &mpgPath, float capSec)
     SetTextureFilter(m_tex, TEXTURE_FILTER_BILINEAR);
 
     m_hasAudio = plm_get_num_audio_streams(m_plm) > 0;
+    m_audioEnded = false;
+    m_stage.clear();
+    m_stageFrames = 0;
     if (m_hasAudio)
     {
-        const int sr = plm_get_samplerate(m_plm);
-        m_stream = LoadAudioStream(sr, 32, 2); // float32 stereo, как в примере
-        PlayAudioStream(m_stream);
-        plm_set_audio_lead_time(m_plm, (double)PLM_AUDIO_SAMPLES_PER_FRAME / (double)sr);
+        m_sr = plm_get_samplerate(m_plm);
+        if (m_sr <= 0)
+            m_sr = 44100;
+
+        SetAudioStreamBufferSizeDefault(kAudioBufferFrames);
+        m_stream = LoadAudioStream(m_sr, 32, 2);
+
+        for (int i = 0; i < 2; ++i)
+        {
+            topUpStage();
+            if (m_stageFrames == 0)
+                break;
+            writeChunk();
+        }
     }
+
+    m_playStart = GetTime();
+    if (m_hasAudio)
+        PlayAudioStream(m_stream);
 
     m_capSec = capSec;
     m_finished = false;
-    m_videoAccum = 0.0;
 
     TraceLog(LOG_INFO, "Video: %s (dur %.1fs, cap %.1fs, %dx%d @ %.2f fps)",
              mpgPath.c_str(), plm_get_duration(m_plm), capSec, w, h, m_framerate);
+
     return true;
+}
+
+void VideoPlayer::topUpStage()
+{
+    while (m_stageFrames < kAudioBufferFrames && !m_audioEnded)
+    {
+        plm_samples_t *s = plm_decode_audio(m_plm);
+        if (!s)
+        {
+            m_audioEnded = true;
+            break;
+        }
+        const int n = PLM_AUDIO_SAMPLES_PER_FRAME * 2; // stereo
+        m_stage.insert(m_stage.end(), s->interleaved, s->interleaved + n);
+        m_stageFrames += PLM_AUDIO_SAMPLES_PER_FRAME;
+    }
+}
+
+void VideoPlayer::writeChunk()
+{
+    if (m_stageFrames < kAudioBufferFrames)
+    {
+        m_stage.resize((size_t)kAudioBufferFrames * 2, 0.0f); // тишина в хвосте
+        m_stageFrames = kAudioBufferFrames;
+    }
+    UpdateAudioStream(m_stream, m_stage.data(), kAudioBufferFrames);
+    m_stage.erase(m_stage.begin(), m_stage.begin() + (size_t)kAudioBufferFrames * 2);
+    m_stageFrames -= kAudioBufferFrames;
+}
+
+void VideoPlayer::pumpAudio()
+{
+    while (IsAudioStreamProcessed(m_stream))
+    {
+        topUpStage();
+        if (m_stageFrames == 0)
+            break;
+        writeChunk();
+    }
 }
 
 void VideoPlayer::update(float dt)
@@ -66,47 +129,41 @@ void VideoPlayer::update(float dt)
     if (!m_plm || m_finished)
         return;
 
-    if (m_capSec > 0.0f && plm_get_time(m_plm) >= (double)m_capSec)
+    const float t = timePlayed();
+    if (m_capSec > 0.0f && t >= m_capSec)
     {
         m_finished = true;
         return;
     }
 
-    // Видео: кадр каждые 1/framerate, догоняем не более 3 кадров за тик
-    m_videoAccum += dt;
-    const double frameDur = 1.0 / m_framerate;
-    bool dirty = false;
-    int guard = 0;
-    while (m_videoAccum >= frameDur && guard < 3)
-    {
-        m_videoAccum -= frameDur;
-        plm_frame_t *fr = plm_decode_video(m_plm);
-        if (fr)
-        {
-            plm_frame_to_rgb(fr, m_rgb.data(), m_stride);
-            dirty = true;
-        }
-        ++guard;
-    }
-    if (m_videoAccum > frameDur * 3.0) // сброс долга после фризов
-        m_videoAccum = 0.0;
-    if (dirty)
-        UpdateTexture(m_tex, m_rgb.data());
-
-    // Аудио: дозаправка буфера raudio, как в примере
     if (m_hasAudio)
+        pumpAudio();
+
+    if (m_nextTime >= 0.0f && m_nextTime <= t)
     {
-        while (IsAudioStreamProcessed(m_stream))
+        UpdateTexture(m_tex, m_nextRgb.data());
+        m_nextTime = -1.0f;
+    }
+
+    while (m_nextTime < 0.0f && !m_videoEnded)
+    {
+        plm_frame_t *fr = plm_decode_video(m_plm);
+        if (!fr)
         {
-            plm_samples_t *s = plm_decode_audio(m_plm);
-            if (!s)
-                break;
-            UpdateAudioStream(m_stream, s->interleaved, PLM_AUDIO_SAMPLES_PER_FRAME * 2);
-            //UpdateAudioStream(m_stream, s->interleaved, PLM_AUDIO_SAMPLES_PER_FRAME);
+            m_videoEnded = true;
+            break;
+        }
+        plm_frame_to_rgb(fr, m_nextRgb.data(), m_stride);
+        m_nextTime = (float)fr->time;
+        if (m_nextTime <= t)
+        {
+            UpdateTexture(m_tex, m_nextRgb.data());
+            m_nextTime = -1.0f;
         }
     }
 
-    if (plm_has_ended(m_plm))
+    const bool audioEnd = !m_hasAudio || m_audioEnded;
+    if (m_videoEnded && m_nextTime < 0.0f && audioEnd)
         m_finished = true;
 }
 
@@ -120,7 +177,10 @@ void VideoPlayer::draw(Rectangle dst) const
 
 float VideoPlayer::timePlayed() const
 {
-    return m_plm ? (float)plm_get_time(m_plm) : 0.0f;
+    if (!m_plm)
+        return 0.0f;
+    const double t = GetTime() - m_playStart;
+    return (float)(t < 0.0 ? 0.0 : t);
 }
 
 void VideoPlayer::close()
@@ -141,7 +201,12 @@ void VideoPlayer::close()
         plm_destroy(m_plm);
         m_plm = nullptr;
     }
+    m_nextTime = -1.0f;
+    m_videoEnded = false;
     m_rgb.clear();
+    m_nextRgb.clear();
+    m_stage.clear();
+    m_stageFrames = 0;
     m_hasAudio = false;
     m_finished = false;
 }

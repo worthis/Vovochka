@@ -52,7 +52,6 @@ namespace vovochka
         }
 
         loadVideoGraphics();
-        loadVideoDurations();
         loadMenuGraphics();
         loadMenuSounds();
 
@@ -106,18 +105,6 @@ namespace vovochka
                 }
             }
         }
-    }
-
-    void MenuSystem::loadVideoDurations()
-    {
-        IniReader ini;
-        const std::string path = m_dataRoot + "/COMMON/GAMECONFIGINF/VideoDuration.dat";
-        if (!ini.loadFile(path))
-            return;
-
-        m_videoFullSec.assign(12, 0);
-        for (int i = 1; i <= 12; ++i)
-            m_videoFullSec[i - 1] = ini.getInt("1", std::to_string(i), 0);
     }
 
     void MenuSystem::loadMenuGraphics()
@@ -403,7 +390,7 @@ namespace vovochka
 
                 const std::string path = m_dataRoot + "/VIDEO/video" +
                                          std::to_string(m_selectedItem + 1) + ".mpg";
-                const int avail = videoAvailSec(m_selectedItem);
+                const int avail = SaveSystem::instance().videoAvailSec(m_selectedItem + 1);
                 if (avail > 0 && m_videoPlayer.open(path, (float)avail))
                     setScreen(MenuScreen::VideoWindow);
                 else
@@ -642,7 +629,7 @@ namespace vovochka
         if (const SpriteSheetGPU *s = m_videoGraphics.get("FilmMenu"))
             DrawTexturePro(s->texture, s->frame(0), Rectangle{0, 0, 800, 600}, {0, 0}, 0.0f, WHITE);
 
-        const float gx = 170.0f, gy = 113.0f, cw = 115.0f, ch = 111.0f;
+        const float gx = 160.0f, gy = 110.0f, cw = 120.0f, ch = 120.0f;
         float selX = gx, selY = gy;
 
         for (int i = 0; i < 12; ++i)
@@ -656,8 +643,8 @@ namespace vovochka
                 DrawTexturePro(c->texture, c->frame(0), Rectangle{x, y, cw, ch}, {0, 0}, 0.0f, WHITE);
 
             // времена: розовое = доступно, голубое = полное
-            const int full = (i < (int)m_videoFullSec.size()) ? m_videoFullSec[i] : 0;
-            const int avail = videoAvailSec(i);
+            const int full = SaveSystem::instance().videoFullSec(i + 1);
+            const int avail = SaveSystem::instance().videoAvailSec(i + 1);
 
             font(kFontVideoAvail).draw(formatTime(avail), x + 2.0f, y + 2.0f);
             const std::string fs = formatTime(full);
@@ -693,8 +680,8 @@ namespace vovochka
         if (cap > 0.0f)
         {
             const float frac = std::clamp(m_videoPlayer.timePlayed() / cap, 0.0f, 1.0f);
-            DrawRectangle(144, 492, 512, 8, Color{30, 30, 30, 255});
-            DrawRectangle(144, 492, (int)(512.0f * frac), 8, Color{255, 64, 160, 255});
+            DrawRectangle(144, 492, 512, 4, Color{30, 30, 30, 255});
+            DrawRectangle(144, 492, (int)(512.0f * frac), 4, Color{255, 64, 160, 255});
         }
 
         if (const SpriteSheetGPU *b = m_videoGraphics.get("BackBtn"))
@@ -714,16 +701,6 @@ namespace vovochka
     {
         m_quitRequested = false;
         m_startGameRequested = false;
-    }
-
-    int MenuSystem::videoAvailSec(int idx) const
-    {
-        if (idx < 0 || idx >= 12 || idx >= (int)m_videoFullSec.size())
-            return 0;
-
-        // Доступное время считаем из ЛУЧШИХ очков уровня из save-файла
-        const int score = SaveSystem::instance().levelScore(idx + 1);
-        return (m_videoFullSec[idx] * score + 99) / 100; // реконструкция: ceil(full*score/100)
     }
 
     std::string MenuSystem::formatTime(int sec)
