@@ -6,7 +6,7 @@ INCLUDES	:=	include
 include $(DEVKITPRO)/libnx/switch_rules
 
 APP_TITLE := Vovochka
-APP_AUTHOR := MachoStudio, ported by Worthis
+APP_AUTHOR := Worthis
 APP_VERSION := 1.0.0.0
 
 ARCH := -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE

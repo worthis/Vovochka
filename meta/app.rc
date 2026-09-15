@@ -19,7 +19,7 @@ BEGIN
             VALUE "FileDescription", "Vovochka"
             VALUE "FileVersion", "1.0.0.0"
             VALUE "InternalName", "Vovochka"
-            VALUE "LegalCopyright", "Ported by Worthis"
+            VALUE "LegalCopyright", "Worthis"
             VALUE "OriginalFilename", "vovochka.exe"
             VALUE "ProductName", "Vovochka"
             VALUE "ProductVersion", "1.0.0.0"
