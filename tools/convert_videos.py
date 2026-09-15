@@ -27,15 +27,15 @@ def main() -> int:
 
     ap = argparse.ArgumentParser(description="MOVIxxxx.AVI -> videoN.mpg + audioN.mp3")
     ap.add_argument("--src", type=Path, default=script_dir,
-                    help="папка с MOVIxxxx.AVI (по умолчанию — папка скрипта)")
+                    help="folder with MOVIxxxx.AVI (deafult - script folder)")
     ap.add_argument("--out", type=Path, default=script_dir.parent / "data" / "VIDEO",
-                    help="папка результатов (по умолчанию ../data/VIDEO от скрипта)")
-    ap.add_argument("--video-br", default="2500k", help="битрейт MPEG-1 video")
-    ap.add_argument("--audio-br", default="128k", help="битрейт MP2 audio")
-    ap.add_argument("--start", type=int, default=1, help="первый номер ролика")
-    ap.add_argument("--count", type=int, default=12, help="последний номер ролика (включительно)")
+                    help="result folder (default ../data/VIDEO)")
+    ap.add_argument("--video-br", default="2500k", help="bitrate MPEG-1 video")
+    ap.add_argument("--audio-br", default="128k", help="bitrate MP2 audio")
+    ap.add_argument("--start", type=int, default=1, help="first video number")
+    ap.add_argument("--count", type=int, default=12, help="last video number (included)")
     ap.add_argument("--pause", action="store_true",
-                    help="ждать Enter в конце (удобно при запуске двойным кликом)")
+                    help="wait for Enter at the end")
     args = ap.parse_args()
 
     # where ffmpeg >nul
