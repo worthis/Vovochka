@@ -41,6 +41,7 @@ namespace vovochka
         void update(float dt, InputSystem &input);
         void render();
 
+        void enterPause();
         void goGameOver(bool isQuitting);
 
         bool isQuitRequested() const { return m_quitRequested; }
@@ -53,6 +54,7 @@ namespace vovochka
         std::string m_dataRoot;
         MenuScreen m_currentScreen = MenuScreen::GameTitle;
 
+        Texture2D m_pauseBackdrop{};
         Texture2D m_backdrop{};
         int m_backdropW = 0, m_backdropH = 0;
 
@@ -70,11 +72,23 @@ namespace vovochka
         int m_selectedDifficulty = 1;
         float m_gameMenuTimer = 0.0f;
 
+        Vector2 m_lastCursorPos = {0.0f, 0.0f};
+        bool m_cursorActive = false;
+        bool m_cursorVisible = false;
+        bool m_hoverBackBtn = false;
+        bool m_pressBackBtn = false;
+
         void loadMenuGraphics();
         void loadMenuSounds();
         void loadVideoGraphics();
+
         const BitmapFont &font(const char *name) const;
         void updateBackdrop(int sw, int sh);
+
+        void resumeGame();
+        void releasePauseBackdrop();
+        void activatePauseItem(int idx);
+
         void drawFon();
         void drawBackdrop();
         void drawScreen(MenuScreen screen);
@@ -85,8 +99,19 @@ namespace vovochka
         void drawVideoWindow();
         void drawExitMenu();
         void drawGameOver();
+        void drawPauseMenu();
+        void drawPauseBackdrop();
+        void drawCursor();
+
+        int hitTestMainMenu(float mx, float my) const;
+        int hitTestDifficulty(float mx, float my) const;
+        int hitTestVideo(float mx, float my) const;
+        int hitTestExit(float mx, float my) const;
+        bool hitTestBackBtn(float mx, float my) const;
+        bool hitTestBackBtnVideo(float mx, float my) const;
+        int hitTestPause(float mx, float my) const;
+
         void playMenuSound(const std::string &name);
-        static std::string formatTime(int sec);
     };
 
 } // namespace vovochka

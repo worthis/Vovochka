@@ -149,4 +149,12 @@ namespace vovochka
                      255};
     }
 
+    std::string formatTime(int sec)
+    {
+        char buf[16];
+        const char *kTimeFormat = "%d:%02d";
+        std::snprintf(buf, sizeof(buf), kTimeFormat, sec / 60, sec % 60);
+        return buf;
+    }
+
 } // namespace vovochka

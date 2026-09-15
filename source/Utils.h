@@ -35,4 +35,7 @@ namespace vovochka
     // Распаковка RGB-цвета (0xRRGGBB) в Color
     Color unpackColor(uint32_t rgb);
 
+    // Форматирование времени из секунд в строку
+    std::string formatTime(int sec);
+
 } // namespace vovochka

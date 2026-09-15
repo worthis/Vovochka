@@ -35,7 +35,8 @@ int main(int argc, char **argv)
     while (!WindowShouldClose())
     {
         const float dt = GetFrameTime();
-        input.update();
+
+        input.update(dt);
 
         if (menu.currentScreen() != vovochka::MenuScreen::InGame)
         {
@@ -64,7 +65,12 @@ int main(int argc, char **argv)
                 BeginDrawing();
                 ClearBackground(BLACK);
                 EndDrawing();
+                continue;
+            }
 
+            if (input.isPausePressed())
+            {
+                menu.enterPause();
                 continue;
             }
 
