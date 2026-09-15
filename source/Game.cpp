@@ -24,7 +24,7 @@ namespace vovochka
 
         m_fontHud.load(m_dataRoot + "/COMMON/FONT/Font6");
 
-        setLevel(m_currentLevel);
+        setLevel(m_currentLevel, m_difficulty);
         m_running = true;
 
         return true;
@@ -32,17 +32,27 @@ namespace vovochka
 
     void Game::shutdown()
     {
-        if (m_running)
-        {
-            m_renderer.unload();
-            m_fontHud.unload();
-            unloadSounds();
-            m_running = false;
-        }
+
+        m_renderer.unload();
+        m_fontHud.unload();
+        unloadSounds();
+
+        m_running = false;
     }
 
-    void Game::setLevel(int n)
+    void Game::setLevel(int level, int difficulty)
     {
+        const char *loadingText = TextFormat("Loading level %d...", m_currentLevel);
+        const int loadingTextLength = MeasureText(loadingText, 40);
+
+        BeginDrawing();
+        ClearBackground(BLACK);
+        DrawText(loadingText, (GetScreenWidth() - loadingTextLength) * 0.5f, GetScreenHeight() * 0.5f, 40, WHITE);
+        EndDrawing();
+
+        m_difficulty = std::clamp(difficulty, 1, 3);
+        m_loader.loadDifficulty(m_difficulty, m_diff);
+
         m_stats = Stats{};
         m_stats.healthMax = m_diff.playerLifeMax;
         m_stats.health = m_stats.healthMax;
@@ -56,7 +66,7 @@ namespace vovochka
         m_hurtTimer = 0.0f;
         m_deathTimer = 0.0f;
         m_bossGrabCooldown = 0.0f;
-        m_currentLevel = std::clamp(n, 1, 12);
+        m_currentLevel = std::clamp(level, 1, 12);
 
         m_renderer.unload();
 
@@ -84,8 +94,6 @@ namespace vovochka
                       m_renderer.sheet("PlayerUndoAttack"),
                       m_renderer.sheet("PlayerDestroing"),
                       tw, th, m_diff.playerSpeed * kSpeedScale);
-
-        m_loader.loadDifficulty(m_difficulty, m_diff);
 
         buildFreePoints();
         spawnCondoms();
@@ -123,6 +131,10 @@ namespace vovochka
             SetMusicVolume(m_music, m_musicVolume);
             m_musicPlaying = true;
         }
+
+        BeginDrawing();
+        ClearBackground(BLACK);
+        EndDrawing();
     }
 
     void Game::updateCamera()
@@ -163,37 +175,15 @@ namespace vovochka
             return;
         }
 
-        // Отладочные клавиши (оставляем прямыми, это не основное управление)
         if (IsKeyPressed(KEY_G))
             m_debugGrid = !m_debugGrid;
-
-        if (IsKeyPressed(KEY_E))
-            setLevel(m_currentLevel + 1);
-
-        if (IsKeyPressed(KEY_Q))
-            setLevel(m_currentLevel - 1);
-
-        if (IsKeyPressed(KEY_ONE))
-        {
-            m_difficulty = 1;
-            setLevel(m_currentLevel);
-        }
-
-        if (IsKeyPressed(KEY_TWO))
-        {
-            m_difficulty = 2;
-            setLevel(m_currentLevel);
-        }
-
-        if (IsKeyPressed(KEY_THREE))
-        {
-            m_difficulty = 3;
-            setLevel(m_currentLevel);
-        }
     }
 
     void Game::update(float dt)
     {
+        if (m_levelCompletedPending)
+            return;
+
         // Системный ввод (отладка, смена уровня)
         processSystemInput();
 
@@ -203,7 +193,7 @@ namespace vovochka
             UpdateMusicStream(m_music);
         }
 
-        // Гибель игрока: пауза и рестарт уровня
+        // Гибель игрока
         if (m_deathTimer > 0.0f)
         {
             m_deathTimer -= dt;
@@ -211,23 +201,11 @@ namespace vovochka
             {
                 --m_lives;
                 if (m_lives > 0)
-                    setLevel(m_currentLevel); // переиграть уровень
+                    setLevel(m_currentLevel, m_difficulty); // переиграть уровень
                 else
-                    m_gameOver = true; // жизни кончились
+                    m_running = false; // жизни кончились
+                return;
             }
-        }
-
-        // Game over: по клавише — сброс в начало
-        if (m_gameOver)
-        {
-            if (m_input.isPausePressed() ||
-                m_input.isBombPressed())
-            {
-                m_lives = 3;
-                m_gameOver = false;
-                setLevel(1);
-            }
-            return; // не обновляем геймплей
         }
 
         // Проверка условий создания бомбы
@@ -676,28 +654,6 @@ namespace vovochka
                 DrawLineV({0, y * th}, {mapW, y * th}, ColorAlpha(WHITE, 0.15f));
         }
 
-        // Экран победы
-        if (m_victory)
-        {
-            m_victoryTimer += GetFrameTime();
-
-            // Простой текст победы
-            const char *msg = "VICTORY!";
-            int fontSize = 48;
-            int textWidth = MeasureText(msg, fontSize);
-            int screenW = GetScreenWidth();
-            int screenH = GetScreenHeight();
-
-            DrawText(msg, (screenW - textWidth) / 2, screenH / 2 - fontSize / 2, fontSize, GOLD);
-            DrawText("Press any key to exit", (screenW - MeasureText("Press any key to exit", 20)) / 2,
-                     screenH / 2 + 50, 20, WHITE);
-
-            if (m_victoryTimer > 2.0f && IsKeyPressed(KEY_SPACE))
-            {
-                m_running = false;
-            }
-        }
-
         EndMode2D();
 
         // HUD
@@ -749,15 +705,13 @@ namespace vovochka
         if (m_freePoints.empty())
             return;
 
-        srand(12345 + m_currentLevel * 7919 + m_difficulty * 104729);
-
         const float tw = static_cast<float>(m_renderer.tileW());
         const float th = static_cast<float>(m_renderer.tileH());
         const SpriteSheetGPU *cs = m_renderer.sheet("Condom");
         const float cw = cs ? static_cast<float>(cs->patternW) : 28.0f;
         const float ch = cs ? static_cast<float>(cs->patternH) : 28.0f;
 
-        // Плотность ремейка: один спавн кладёт стак 1..3,
+        // Плотность: один спавн кладёт стак 1..3,
         // поэтому точек на карте меньше, а суммарное число = CondomCount.
         // Точка принимает не больше kStackCap.
         constexpr int kStackMin = 1;
@@ -1057,25 +1011,17 @@ namespace vovochka
     {
         playSound("LevelComplete");
 
+        m_completedLevel = m_currentLevel;
+        m_levelCompletedPending = true;
         SaveSystem::instance().submitLevelScore(m_currentLevel, (int)m_stats.score, m_difficulty);
-
-        if (m_currentLevel >= 12)
-        {
-            // Победа!
-            showVictory();
-        }
-        else
-        {
-            // Следующий уровень
-            setLevel(m_currentLevel + 1);
-        }
     }
 
-    void Game::showVictory()
+    void Game::proceedToNextLevel()
     {
-        m_victory = true;
-        m_victoryTimer = 0.0f;
-        playSound("Victory");
+        m_levelCompletedPending = false;
+        m_completedLevel = 0;
+        if (m_currentLevel < 12)
+            setLevel(m_currentLevel + 1, m_difficulty);
     }
 
     void Game::damagePlayer(int dmg)

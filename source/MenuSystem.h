@@ -44,6 +44,9 @@ namespace vovochka
         void enterPause();
         void goGameOver(bool isQuitting);
 
+        bool openLevelVideo(int level);
+        bool isResumeGameRequested() const { return m_resumeGameRequested; }
+
         bool isQuitRequested() const { return m_quitRequested; }
         bool isStartGameRequested() const { return m_startGameRequested; }
         int selectedDifficulty() const { return m_selectedDifficulty; }
@@ -65,6 +68,8 @@ namespace vovochka
 
         VideoPlayer m_videoPlayer;
 
+        bool m_videoFromLevel = false;
+        bool m_resumeGameRequested = false;
         bool m_quitRequested = false;
         bool m_startGameRequested = false;
         bool m_gameOverQuitting = false;

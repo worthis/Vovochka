@@ -576,7 +576,17 @@ namespace vovochka
             {
                 m_videoPlayer.close();
                 playMenuSound("Down1");
-                setScreen(MenuScreen::Video);
+
+                if (m_videoFromLevel)
+                {
+                    m_videoFromLevel = false;
+                    m_resumeGameRequested = true;
+                    setScreen(MenuScreen::InGame);
+                }
+                else
+                {
+                    setScreen(MenuScreen::Video);
+                }
             }
 
             return;
@@ -954,6 +964,7 @@ namespace vovochka
         m_quitRequested = false;
         m_gameOverQuitting = false;
         m_startGameRequested = false;
+        m_resumeGameRequested = false;
     }
 
     void MenuSystem::enterPause()
@@ -982,6 +993,20 @@ namespace vovochka
     {
         releasePauseBackdrop();
         setScreen(MenuScreen::InGame);
+    }
+
+    bool MenuSystem::openLevelVideo(int level)
+    {
+        const std::string path = m_dataRoot + "/VIDEO/video" + std::to_string(level) + ".mpg";
+        const int avail = SaveSystem::instance().videoAvailSec(level);
+        if (avail <= 0 || !m_videoPlayer.open(path, (float)avail))
+        {
+            TraceLog(LOG_WARNING, "Level video unavailable: level %d", level);
+            return false;
+        }
+        m_videoFromLevel = true;
+        setScreen(MenuScreen::VideoWindow);
+        return true;
     }
 
     void MenuSystem::activatePauseItem(int idx)
@@ -1128,7 +1153,7 @@ namespace vovochka
 
         // Курсор: простой треугольник-указатель, чтобы не зависеть от ассета
         const float s = 10.0f;
-        
+
         DrawTriangle(
             Vector2{cx, cy},
             Vector2{cx + s, cy + s * 0.8f},

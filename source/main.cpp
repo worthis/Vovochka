@@ -16,6 +16,8 @@ int main(int argc, char **argv)
     // data/ рядом с бинарником либо через argv[1]
     std::string dataRoot = (argc > 1) ? argv[1] : "data";
 
+    srand(time(NULL));
+
     SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
     InitWindow(1280, 720, "Vovochka");
     InitAudioDevice();
@@ -53,7 +55,13 @@ int main(int argc, char **argv)
                     game.init();
                     gameInitialized = true;
                 }
-                game.setLevel(menu.selectedDifficulty());
+                game.setLevel(1, menu.selectedDifficulty());
+                menu.resetRequests();
+            }
+
+            if (menu.isResumeGameRequested())
+            {
+                game.proceedToNextLevel();
                 menu.resetRequests();
             }
         }
@@ -77,8 +85,15 @@ int main(int argc, char **argv)
             game.update(dt);
             game.render();
 
-            if (!game.isRunning())
+            if (game.isLevelCompleted())
+            {
+                if (!menu.openLevelVideo(game.completedLevel()))
+                    game.proceedToNextLevel();
+            }
+            else if (!game.isRunning())
+            {
                 menu.goGameOver(false);
+            }
         }
     }
 

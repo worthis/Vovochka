@@ -28,7 +28,10 @@ namespace vovochka
         void update(float dt);
         void render();
         void shutdown();
-        void setLevel(int n); // 1..12
+        void setLevel(int level, int difficulty); // 1..12, 1..3
+        bool isLevelCompleted() const { return m_levelCompletedPending; }
+        int completedLevel() const { return m_completedLevel; }
+        void proceedToNextLevel();
 
     private:
         static constexpr float kSpeedScale = 3000.0f;
@@ -114,7 +117,7 @@ namespace vovochka
 
         float m_laughTimer = 0.0f;
         bool m_exitActive = false;
-        int m_difficulty = 1; // 1..3, клавиши 1/2/3
+        int m_difficulty = 1; // 1..3
         int m_currentLevel = 1;
         bool m_debugGrid = false;
         bool m_running = false;
@@ -125,6 +128,8 @@ namespace vovochka
         float m_victoryTimer = 0.0f;
         int m_lives = 3; // жизни игрока (3 изначально)
         bool m_gameOver = false;
+        bool m_levelCompletedPending = false;
+        int m_completedLevel = 0;
 
         void buildFreePoints();
         void spawnCondoms();
@@ -156,7 +161,6 @@ namespace vovochka
         void updateLevelExit();
         void activateLevelExit();
         void nextLevel();
-        void showVictory();
 
         void loadSounds();
         void unloadSounds();
