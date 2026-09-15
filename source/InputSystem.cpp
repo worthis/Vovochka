@@ -77,7 +77,7 @@ namespace vovochka
                 if (std::fabs(stickX) > std::fabs(stickY))
                     m_currLStickDir = (stickX > 0.0f) ? StickDirection::Right : StickDirection::Left;
                 else
-                    m_currLStickDir = (stickY > 0.0f) ? StickDirection::Down : StickDirection::Up;
+                    m_currLStickDir = (stickY > 0.0f) ? StickDirection::Up : StickDirection::Down;
             }
             else
             {

@@ -188,11 +188,12 @@ namespace vovochka
         }
     }
 
-    void MenuSystem::updateBackdrop(int sw, int sh)
+    void MenuSystem::updateBackdrop(int sw, int sh, const char *bgName, SpriteSheetManager &graphics)
     {
         if (m_backdrop.id != 0 &&
             m_backdropW == sw &&
-            m_backdropH == sh)
+            m_backdropH == sh &&
+            m_backdropName == bgName)
             return;
 
         if (m_backdrop.id != 0)
@@ -201,7 +202,7 @@ namespace vovochka
             m_backdrop = {};
         }
 
-        const SpriteSheetGPU *fon = m_menuGraphics.get("MenuFon");
+        const SpriteSheetGPU *fon = graphics.get(bgName);
         if (!fon || !fon->valid())
             return;
 
@@ -259,8 +260,9 @@ namespace vovochka
 
         m_backdropW = sw;
         m_backdropH = sh;
+        m_backdropName = bgName;
 
-        TraceLog(LOG_INFO, "Menu backdrop rebuilt: %dx%d", sw, sh);
+        TraceLog(LOG_INFO, "Backdrop rebuilt: %s (%dx%d)", bgName, sw, sh);
     }
 
     void MenuSystem::drawBackdrop()
@@ -693,18 +695,33 @@ namespace vovochka
         const int sh = GetScreenHeight();
         const int x0 = std::max(0, (sw - 800) / 2);
         const int y0 = std::max(0, (sh - 600) / 2);
+        const char *bgName = nullptr;
+        SpriteSheetManager *bgGraphics = nullptr;
 
-        bool useFon = (m_currentScreen == MenuScreen::Main ||
-                       m_currentScreen == MenuScreen::Difficulty ||
-                       m_currentScreen == MenuScreen::Options);
+        if (m_currentScreen == MenuScreen::Main ||
+            m_currentScreen == MenuScreen::Difficulty)
+        {
+            bgName = "MenuFon";
+            bgGraphics = &m_menuGraphics;
+        }
+        else if (m_currentScreen == MenuScreen::Video)
+        {
+            bgName = "FilmMenu";
+            bgGraphics = &m_videoGraphics;
+        }
+        else if (m_currentScreen == MenuScreen::VideoWindow)
+        {
+            bgName = "FilmFon";
+            bgGraphics = &m_videoGraphics;
+        }
 
-        if (useFon)
-            updateBackdrop(sw, sh);
+        if (bgName && bgGraphics)
+            updateBackdrop(sw, sh, bgName, *bgGraphics);
 
         BeginDrawing();
         ClearBackground(BLACK);
 
-        if (useFon)
+        if (bgName)
             drawBackdrop();
 
         if (m_currentScreen == MenuScreen::Pause)

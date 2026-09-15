@@ -59,6 +59,7 @@ namespace vovochka
 
         Texture2D m_pauseBackdrop{};
         Texture2D m_backdrop{};
+        std::string m_backdropName;
         int m_backdropW = 0, m_backdropH = 0;
 
         SpriteSheetManager m_menuGraphics;
@@ -87,7 +88,7 @@ namespace vovochka
         void loadVideoGraphics();
 
         const BitmapFont &font(const char *name) const;
-        void updateBackdrop(int sw, int sh);
+        void updateBackdrop(int sw, int sh, const char *bgName, SpriteSheetManager &graphics);
         void releasePauseBackdrop();
 
         void drawFon();
