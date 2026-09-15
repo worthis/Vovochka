@@ -194,9 +194,6 @@ namespace vovochka
 
     void Game::update(float dt)
     {
-        // Сбор ввода
-        m_input.update();
-
         // Системный ввод (отладка, смена уровня)
         processSystemInput();
 
@@ -360,7 +357,7 @@ namespace vovochka
             m_intimacy.t += dt;
             const float k = std::min(1.0f, m_intimacy.t / m_intimacy.duration);
             m_stats.power = (int)std::ceil(m_intimacy.powerStart * (1.0f - k));
-            m_stats.score = std::min(100.0f, m_stats.score + 2.0f * m_intimacy.powerStart * dt / m_intimacy.duration);
+            m_stats.score = m_stats.score + 2.0f * m_intimacy.powerStart * dt / m_intimacy.duration;
             if (k >= 1.0f)
                 endIntimacy();
         }
@@ -1014,14 +1011,14 @@ namespace vovochka
                 {
                     e.alive = false;
                     playSound("YEAH");
-                    m_stats.score = std::min(100.0f, m_stats.score + 12.0f);
+                    m_stats.score = m_stats.score + 12.0f;
                 }
             }
             else
             {
                 e.alive = false;
                 playSound("YEAH");
-                m_stats.score = std::min(100.0f, m_stats.score + 2.0f);
+                m_stats.score = m_stats.score + 2.0f;
             }
         }
 
@@ -1140,7 +1137,7 @@ namespace vovochka
         drawBar(Rectangle{154.0f + ox, 30.0f, 128.0f, 10.0f},
                 (float)m_stats.health / (float)m_stats.healthMax);
         drawBar(Rectangle{297.0f + ox, 30.0f, 128.0f, 10.0f},
-                m_stats.score / 100.0f);
+                m_stats.score < 100.0f ? m_stats.score : 100.0f / 100.0f);
 
         if (const SpriteSheetGPU *pf = m_renderer.sheet("ProgressFon"))
         {
