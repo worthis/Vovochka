@@ -42,7 +42,7 @@ namespace vovochka
 
     private:
         static constexpr float kDeathFallSpeed = 300.0f;
-        static constexpr float kIdleDelay = 1.5f;
+        static constexpr float kIdleDelay = 3.0f;
 
         Animation m_animStand;
         Animation m_animStand1;

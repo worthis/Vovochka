@@ -22,16 +22,17 @@ int main(int argc, char **argv)
     InitWindow(1280, 720, "Vovochka");
     InitAudioDevice();
     SetTargetFPS(60);
+    SetExitKey(KEY_NULL);
 
     ConfigSystem::instance().loadSettings("settings.json");
     vovochka::SaveSystem::instance().load("save.json");
     vovochka::SaveSystem::instance().loadVideoDurations(dataRoot);
 
+    vovochka::InputSystem input;
     vovochka::MenuSystem menu(dataRoot);
+    vovochka::Game game(dataRoot);
     menu.init();
 
-    vovochka::InputSystem input;
-    vovochka::Game game(dataRoot);
     bool gameInitialized = false;
 
     while (!WindowShouldClose())
@@ -82,7 +83,7 @@ int main(int argc, char **argv)
                 continue;
             }
 
-            game.update(dt);
+            game.update(dt, input);
             game.render();
 
             if (game.isLevelCompleted())

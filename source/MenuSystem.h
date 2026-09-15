@@ -77,8 +77,7 @@ namespace vovochka
         int m_selectedDifficulty = 1;
         float m_gameMenuTimer = 0.0f;
 
-        Vector2 m_lastCursorPos = {0.0f, 0.0f};
-        bool m_cursorActive = false;
+        Vector2 m_cursorPos = {0.0f, 0.0f};
         bool m_cursorVisible = false;
         bool m_hoverBackBtn = false;
         bool m_pressBackBtn = false;
@@ -89,10 +88,7 @@ namespace vovochka
 
         const BitmapFont &font(const char *name) const;
         void updateBackdrop(int sw, int sh);
-
-        void resumeGame();
         void releasePauseBackdrop();
-        void activatePauseItem(int idx);
 
         void drawFon();
         void drawBackdrop();

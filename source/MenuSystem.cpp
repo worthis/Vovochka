@@ -22,11 +22,11 @@ namespace vovochka
     static constexpr float kPauseFirstY = 250.0f;
     static constexpr float kPauseLineH = 50.0f;
 
-    static const std::pair<const char *, MenuScreen> kMainItems[5] = {
+    static const std::pair<const char *, MenuScreen> kMainItems[3] = {
         {"Играть", MenuScreen::Difficulty},
         {"Видео", MenuScreen::Video},
-        {"Рекорды", MenuScreen::Main},
-        {"Настройки", MenuScreen::Main},
+        //{"Рекорды", MenuScreen::Main},
+        //{"Настройки", MenuScreen::Main},
         {"Выход", MenuScreen::Exit},
     };
 
@@ -299,17 +299,19 @@ namespace vovochka
 
     void MenuSystem::update(float dt, InputSystem &input)
     {
+        InputSystem *m_input = &input;
+
         // === Курсор ===
-        m_cursorActive = input.hasCursor();
-        m_cursorVisible = input.isCursorVisible();
-        const bool cursorClicked = input.isCursorClicked();
-        const Vector2 cp = input.getMenuCursorPos();
+        m_cursorVisible = m_input->isCursorVisible();
+        m_cursorPos = m_input->getMenuCursorPos();
+        const bool cursorActive = m_input->hasCursor();
+        const bool cursorClicked = m_input->isCursorClicked();
         bool newHoverBack = false;
         if (m_currentScreen == MenuScreen::Difficulty)
-            newHoverBack = hitTestBackBtn(cp.x, cp.y);
+            newHoverBack = hitTestBackBtn(m_cursorPos.x, m_cursorPos.y);
         else if (m_currentScreen == MenuScreen::Video ||
                  m_currentScreen == MenuScreen::VideoWindow)
-            newHoverBack = hitTestBackBtnVideo(cp.x, cp.y);
+            newHoverBack = hitTestBackBtnVideo(m_cursorPos.x, m_cursorPos.y);
         if (newHoverBack && !m_hoverBackBtn)
             playMenuSound("Move1");
         m_hoverBackBtn = newHoverBack;
@@ -319,8 +321,7 @@ namespace vovochka
         {
             m_gameMenuTimer += dt;
 
-            if (input.isMenuConfirmPressed() ||
-                input.isBombPressed() ||
+            if (m_input->isMenuConfirmPressed() ||
                 cursorClicked ||
                 m_gameMenuTimer > 5.0f)
             {
@@ -334,9 +335,9 @@ namespace vovochka
         {
             const int itemCount = 5;
 
-            if (m_cursorActive)
+            if (cursorActive)
             {
-                const int hit = hitTestMainMenu(cp.x, cp.y);
+                const int hit = hitTestMainMenu(m_cursorPos.x, m_cursorPos.y);
                 if (hit >= 0 &&
                     m_selectedItem != hit)
                 {
@@ -346,7 +347,7 @@ namespace vovochka
             }
             if (cursorClicked)
             {
-                const int hit = hitTestMainMenu(cp.x, cp.y);
+                const int hit = hitTestMainMenu(m_cursorPos.x, m_cursorPos.y);
                 if (hit >= 0)
                 {
                     m_selectedItem = hit;
@@ -355,18 +356,18 @@ namespace vovochka
                 }
             }
 
-            if (input.isMenuUpPressed())
+            if (m_input->isMenuUpPressed())
             {
                 m_selectedItem = (m_selectedItem - 1 + itemCount) % itemCount;
                 playMenuSound("Move1");
             }
-            else if (input.isMenuDownPressed())
+            else if (m_input->isMenuDownPressed())
             {
                 m_selectedItem = (m_selectedItem + 1) % itemCount;
                 playMenuSound("Move1");
             }
 
-            if (input.isMenuConfirmPressed())
+            if (m_input->isMenuConfirmPressed())
             {
                 playMenuSound("Down1");
                 setScreen(kMainItems[m_selectedItem].second);
@@ -377,9 +378,33 @@ namespace vovochka
 
         if (m_currentScreen == MenuScreen::Pause)
         {
-            if (m_cursorActive)
+            auto doPauseAction = [&]()
             {
-                const int hit = hitTestPause(cp.x, cp.y);
+                switch (m_selectedItem)
+                {
+                case 0: // Меню игры — бросаем игру, возвращаемся в главное меню
+                    playMenuSound("Down1");
+                    releasePauseBackdrop();
+                    setScreen(MenuScreen::Main);
+                    break;
+                case 1: // Продолжить
+                    playMenuSound("Down1");
+                    releasePauseBackdrop();
+                    setScreen(MenuScreen::InGame);
+                    break;
+                case 2: // Выйти — gameover-экран и полный выход (тот же путь, что «Выход» из меню)
+                    playMenuSound("OnEnd");
+                    releasePauseBackdrop();
+                    goGameOver(true);
+                    break;
+                default:
+                    break;
+                }
+            };
+
+            if (cursorActive)
+            {
+                const int hit = hitTestPause(m_cursorPos.x, m_cursorPos.y);
                 if (hit >= 0 &&
                     m_selectedItem != hit)
                 {
@@ -389,45 +414,36 @@ namespace vovochka
             }
             if (cursorClicked)
             {
-                const int hit = hitTestPause(cp.x, cp.y);
+                const int hit = hitTestPause(m_cursorPos.x, m_cursorPos.y);
                 if (hit >= 0)
                 {
                     m_selectedItem = hit;
-                    activatePauseItem(hit);
+                    doPauseAction();
                 }
             }
 
-            // Повторное нажатие паузы = продолжить
-            /*if (input.isPausePressed())
-            {
-                playMenuSound("Down1");
-                resumeGame();
-                return;
-            }*/
-
-            if (input.isMenuUpPressed())
+            if (m_input->isMenuUpPressed())
             {
                 m_selectedItem = (m_selectedItem + 2) % 3;
                 playMenuSound("Move1");
             }
-            else if (input.isMenuDownPressed())
+            else if (m_input->isMenuDownPressed())
             {
                 m_selectedItem = (m_selectedItem + 1) % 3;
                 playMenuSound("Move1");
             }
 
-            if (input.isMenuConfirmPressed())
-                activatePauseItem(m_selectedItem);
-            else if (input.isMenuCancelPressed()) // Esc / B = продолжить
-                resumeGame();
+            if (m_input->isMenuConfirmPressed())
+                doPauseAction();
+
             return;
         }
 
         if (m_currentScreen == MenuScreen::Difficulty)
         {
-            if (m_cursorActive)
+            if (cursorActive)
             {
-                const int hit = hitTestDifficulty(cp.x, cp.y);
+                const int hit = hitTestDifficulty(m_cursorPos.x, m_cursorPos.y);
                 if (hit >= 0 &&
                     m_selectedDifficulty != hit + 1)
                 {
@@ -437,7 +453,7 @@ namespace vovochka
             }
             if (cursorClicked)
             {
-                const int hit = hitTestDifficulty(cp.x, cp.y);
+                const int hit = hitTestDifficulty(m_cursorPos.x, m_cursorPos.y);
                 if (hit >= 0)
                 {
                     m_selectedDifficulty = hit + 1;
@@ -446,7 +462,7 @@ namespace vovochka
                     setScreen(MenuScreen::InGame);
                     return;
                 }
-                if (hitTestBackBtn(cp.x, cp.y))
+                if (hitTestBackBtn(m_cursorPos.x, m_cursorPos.y))
                 {
                     playMenuSound("Down1");
                     setScreen(MenuScreen::Main);
@@ -454,25 +470,25 @@ namespace vovochka
                 }
             }
 
-            if (input.isMenuUpPressed())
+            if (m_input->isMenuUpPressed())
             {
                 m_selectedDifficulty = std::max(1, m_selectedDifficulty - 1);
                 playMenuSound("Move1");
             }
-            else if (input.isMenuDownPressed())
+            else if (m_input->isMenuDownPressed())
             {
                 m_selectedDifficulty = std::min(3, m_selectedDifficulty + 1);
                 playMenuSound("Move1");
             }
 
-            if (input.isMenuConfirmPressed())
+            if (m_input->isMenuConfirmPressed())
             {
                 playMenuSound("Down1");
                 m_startGameRequested = true;
                 setScreen(MenuScreen::InGame);
             }
 
-            if (input.isMenuCancelPressed())
+            if (m_input->isMenuCancelPressed())
             {
                 playMenuSound("Down1");
                 setScreen(MenuScreen::Main);
@@ -484,8 +500,8 @@ namespace vovochka
         if (m_currentScreen == MenuScreen::Options)
         {
             // заглушка: назад по отмене/подтверждению
-            if (input.isMenuCancelPressed() ||
-                input.isMenuConfirmPressed())
+            if (m_input->isMenuCancelPressed() ||
+                m_input->isMenuConfirmPressed())
             {
                 playMenuSound("Down1");
                 setScreen(MenuScreen::Main);
@@ -496,9 +512,9 @@ namespace vovochka
 
         if (m_currentScreen == MenuScreen::Video)
         {
-            if (m_cursorActive)
+            if (cursorActive)
             {
-                const int hit = hitTestVideo(cp.x, cp.y);
+                const int hit = hitTestVideo(m_cursorPos.x, m_cursorPos.y);
                 if (hit >= 0 &&
                     m_selectedItem != hit)
                 {
@@ -508,7 +524,7 @@ namespace vovochka
             }
             if (cursorClicked)
             {
-                const int hit = hitTestVideo(cp.x, cp.y);
+                const int hit = hitTestVideo(m_cursorPos.x, m_cursorPos.y);
                 if (hit >= 0)
                 {
                     m_selectedItem = hit;
@@ -522,7 +538,7 @@ namespace vovochka
                         TraceLog(LOG_WARNING, "Video: unavailable or missing file");
                     return;
                 }
-                if (hitTestBackBtnVideo(cp.x, cp.y))
+                if (hitTestBackBtnVideo(m_cursorPos.x, m_cursorPos.y))
                 {
                     playMenuSound("Down1");
                     setScreen(MenuScreen::Main);
@@ -531,13 +547,13 @@ namespace vovochka
             }
 
             int sel = m_selectedItem;
-            if (input.isMenuLeftPressed())
+            if (m_input->isMenuLeftPressed())
                 sel = (sel + 11) % 12;
-            else if (input.isMenuRightPressed())
+            else if (m_input->isMenuRightPressed())
                 sel = (sel + 1) % 12;
-            else if (input.isMenuUpPressed())
+            else if (m_input->isMenuUpPressed())
                 sel = (sel + 8) % 12;
-            else if (input.isMenuDownPressed())
+            else if (m_input->isMenuDownPressed())
                 sel = (sel + 4) % 12;
             if (sel != m_selectedItem)
             {
@@ -545,7 +561,7 @@ namespace vovochka
                 playMenuSound("Move1");
             }
 
-            if (input.isMenuConfirmPressed())
+            if (m_input->isMenuConfirmPressed())
             {
                 playMenuSound("Down1");
 
@@ -557,7 +573,7 @@ namespace vovochka
                 else
                     TraceLog(LOG_WARNING, "Video: unavailable or missing file");
             }
-            else if (input.isMenuCancelPressed())
+            else if (m_input->isMenuCancelPressed())
             {
                 playMenuSound("Down1");
                 setScreen(MenuScreen::Main);
@@ -570,8 +586,8 @@ namespace vovochka
         {
             m_videoPlayer.update(dt);
 
-            if (input.isMenuCancelPressed() ||
-                (cursorClicked && hitTestBackBtnVideo(cp.x, cp.y)) ||
+            if (m_input->isMenuCancelPressed() ||
+                (cursorClicked && hitTestBackBtnVideo(m_cursorPos.x, m_cursorPos.y)) ||
                 m_videoPlayer.finished())
             {
                 m_videoPlayer.close();
@@ -594,9 +610,9 @@ namespace vovochka
 
         if (m_currentScreen == MenuScreen::Exit)
         {
-            if (m_cursorActive)
+            if (cursorActive)
             {
-                const int hit = hitTestExit(cp.x, cp.y);
+                const int hit = hitTestExit(m_cursorPos.x, m_cursorPos.y);
                 if (hit >= 0 &&
                     m_selectedItem != hit)
                 {
@@ -606,7 +622,7 @@ namespace vovochka
             }
             if (cursorClicked)
             {
-                const int hit = hitTestExit(cp.x, cp.y);
+                const int hit = hitTestExit(m_cursorPos.x, m_cursorPos.y);
                 if (hit == 0)
                 {
                     playMenuSound("Down1");
@@ -622,17 +638,17 @@ namespace vovochka
             }
 
             // Горизонтальный выбор из двух пунктов
-            if ((input.isMenuLeftPressed() || input.isMenuUpPressed()) && m_selectedItem != 0)
+            if ((m_input->isMenuLeftPressed() || m_input->isMenuUpPressed()) && m_selectedItem != 0)
             {
                 m_selectedItem = 0;
                 playMenuSound("Move1");
             }
-            else if ((input.isMenuRightPressed() || input.isMenuDownPressed()) && m_selectedItem != 1)
+            else if ((m_input->isMenuRightPressed() || m_input->isMenuDownPressed()) && m_selectedItem != 1)
             {
                 m_selectedItem = 1;
                 playMenuSound("Move1");
             }
-            else if (input.isMenuConfirmPressed())
+            else if (m_input->isMenuConfirmPressed())
             {
                 if (m_selectedItem == 0)
                 {
@@ -645,7 +661,7 @@ namespace vovochka
                     goGameOver(true); // "Да" -> GameOver -> выход
                 }
             }
-            else if (input.isMenuCancelPressed())
+            else if (m_input->isMenuCancelPressed())
             {
                 playMenuSound("Down1");
                 setScreen(MenuScreen::Main); // отмена = "Нет"
@@ -657,8 +673,8 @@ namespace vovochka
         {
             m_gameMenuTimer += dt;
 
-            if (input.isMenuConfirmPressed() ||
-                input.isBombPressed() ||
+            if (m_input->isMenuConfirmPressed() ||
+                m_input->isBombPressed() ||
                 cursorClicked ||
                 m_gameMenuTimer > 5.0f)
             {
@@ -989,12 +1005,6 @@ namespace vovochka
         }
     }
 
-    void MenuSystem::resumeGame()
-    {
-        releasePauseBackdrop();
-        setScreen(MenuScreen::InGame);
-    }
-
     bool MenuSystem::openLevelVideo(int level)
     {
         const std::string path = m_dataRoot + "/VIDEO/video" + std::to_string(level) + ".mpg";
@@ -1007,29 +1017,6 @@ namespace vovochka
         m_videoFromLevel = true;
         setScreen(MenuScreen::VideoWindow);
         return true;
-    }
-
-    void MenuSystem::activatePauseItem(int idx)
-    {
-        switch (idx)
-        {
-        case 0: // Меню игры — бросаем игру, возвращаемся в главное меню
-            playMenuSound("Down1");
-            releasePauseBackdrop();
-            setScreen(MenuScreen::Main);
-            break;
-        case 1: // Продолжить
-            playMenuSound("Down1");
-            resumeGame();
-            break;
-        case 2: // Выйти — gameover-экран и полный выход (тот же путь, что «Выход» из меню)
-            playMenuSound("OnEnd");
-            releasePauseBackdrop();
-            goGameOver(true);
-            break;
-        default:
-            break;
-        }
     }
 
     int MenuSystem::hitTestMainMenu(float mx, float my) const
@@ -1148,10 +1135,9 @@ namespace vovochka
         const int sh = GetScreenHeight();
         const float x0 = (float)std::max(0, (sw - 800) / 2);
         const float y0 = (float)std::max(0, (sh - 600) / 2);
-        const float cx = x0 + m_lastCursorPos.x;
-        const float cy = y0 + m_lastCursorPos.y;
+        const float cx = x0 + m_cursorPos.x;
+        const float cy = y0 + m_cursorPos.y;
 
-        // Курсор: простой треугольник-указатель, чтобы не зависеть от ассета
         const float s = 10.0f;
 
         DrawTriangle(

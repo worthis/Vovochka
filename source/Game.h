@@ -1,5 +1,6 @@
 #pragma once
 
+#include "InputSystem.h"
 #include "MapData.h"
 #include "LevelLoader.h"
 #include "LevelRenderer.h"
@@ -7,7 +8,6 @@
 #include "Player.h"
 #include "Enemy.h"
 #include "LevelExit.h"
-#include "InputSystem.h"
 #include "ConfigSystem.h"
 #include "FontSystem.h"
 #include "raylib.h"
@@ -23,9 +23,8 @@ namespace vovochka
         ~Game();
 
         bool init();
-        void run();
         bool isRunning() const { return m_running; }
-        void update(float dt);
+        void update(float dt, InputSystem &input);
         void render();
         void shutdown();
         void setLevel(int level, int difficulty); // 1..12, 1..3
@@ -43,7 +42,7 @@ namespace vovochka
         static constexpr int kMinimapLineTh = 4;            // толщина линий карты, px
         static constexpr int kMinimapMarkerSize = 4;        // размер квадратиков-меток, px
 
-        struct PreviewEntity
+        struct GirlEntity
         {
             Animation anim;
             MapObjectType type = MapObjectType::Unknown;
@@ -61,9 +60,10 @@ namespace vovochka
 
         struct Stats
         {
-            int health = 8, healthMax = 8; // Energy
-            int power = 6, powerMax = 6;   // Progress1: 0 пусто, 1..6
-            float score = 0;               // 0..100
+            int lives = 3;
+            int health = 8, healthMax = 8;
+            int power = 6, powerMax = 6;
+            float score = 0.0f, scoreMax = 100.0f;
         };
 
         struct IntimacySession
@@ -88,18 +88,17 @@ namespace vovochka
             std::vector<int> hitEnemyIds; // каждый враг — один раз
         };
 
-        Camera2D m_camera{};
         std::string m_dataRoot;
         LevelLoader m_loader{m_dataRoot};
         LevelRenderer m_renderer;
-        InputSystem m_input;
+        Camera2D m_camera{};
         LevelMap m_map;
         Player m_player;
         Stats m_stats{};
         DifficultyParams m_diff{};
         IntimacySession m_intimacy{};
         IntimacySession m_bossIntimacy{};
-        std::vector<PreviewEntity> m_entities;
+        std::vector<GirlEntity> m_entities;
         std::vector<std::pair<int, int>> m_freePoints; // тайлы земли для спавна
         std::vector<CondomStack> m_condoms;
         std::vector<Bomb> m_bombs;
@@ -124,14 +123,13 @@ namespace vovochka
         float m_deathTimer = 0.0f;
         float m_hurtTimer = 0.0f;        // i-frames после урона
         float m_bossGrabCooldown = 0.0f; // кулдаун до повторного захвата
-        bool m_victory = false;          // победа после 12 уровня
-        float m_victoryTimer = 0.0f;
-        int m_lives = 3; // жизни игрока (3 изначально)
         bool m_gameOver = false;
         bool m_levelCompletedPending = false;
         int m_completedLevel = 0;
 
         void buildFreePoints();
+        float calculateScoreMax(int girlsNum, int enemyNum, int enemyGirlNum) const;
+
         void spawnCondoms();
         void spawnBombAtPlayer();
         void spawnEnemies();
@@ -139,27 +137,25 @@ namespace vovochka
 
         void updateGameplay(float dt); // игровая логика: предметы, враги, бомбы, близость
         void updateFootsteps();        // звуки шагов игрока
-        void processSystemInput();     // отладка, смена уровня/сложности
-        bool checkBombConditions();    // проверка условий создания бомбы
         void updateBombs(float dt);
         void updateCamera();
-        void renderHUD();
+        void updateLevelExit();
 
+        void renderHUD();
+        void drawBar(Rectangle r, float fraction);
+        void drawMinimap(Rectangle r);
+
+        bool checkBombConditions(InputSystem &input); // проверка условий создания бомбы
         Rectangle getExplosionBounds(const Bomb &b, const SpriteSheetGPU *es, float tw, float th);
         void explosionDamage(Bomb &b, const Rectangle &exRect);
         void damagePlayer(int dmg);
         void killPlayer();
-
-        void drawBar(Rectangle r, float fraction);
-        void drawMinimap(Rectangle r);
 
         void startIntimacy(int girlIdx);
         void endIntimacy();
         void startBossIntimacy(int bossIdx);
         void endBossIntimacy();
 
-        void updateLevelExit();
-        void activateLevelExit();
         void nextLevel();
 
         void loadSounds();

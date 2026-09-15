@@ -2,7 +2,6 @@
 #include "Utils.h"
 #include "SaveSystem.h"
 #include "SpriteLayout.h"
-#include "InputSystem.h"
 #include "ConfigSystem.h"
 #include <algorithm>
 #include <cmath>
@@ -24,8 +23,7 @@ namespace vovochka
 
         m_fontHud.load(m_dataRoot + "/COMMON/FONT/Font6");
 
-        setLevel(m_currentLevel, m_difficulty);
-        m_running = true;
+        m_running = false;
 
         return true;
     }
@@ -50,6 +48,7 @@ namespace vovochka
         DrawText(loadingText, (GetScreenWidth() - loadingTextLength) * 0.5f, GetScreenHeight() * 0.5f, 40, WHITE);
         EndDrawing();
 
+        m_currentLevel = std::clamp(level, 1, 12);
         m_difficulty = std::clamp(difficulty, 1, 3);
         m_loader.loadDifficulty(m_difficulty, m_diff);
 
@@ -66,7 +65,6 @@ namespace vovochka
         m_hurtTimer = 0.0f;
         m_deathTimer = 0.0f;
         m_bossGrabCooldown = 0.0f;
-        m_currentLevel = std::clamp(level, 1, 12);
 
         m_renderer.unload();
 
@@ -106,13 +104,14 @@ namespace vovochka
         {
             if (o.type != MapObjectType::Girl)
                 continue;
-            PreviewEntity e;
+            GirlEntity e;
             e.type = o.type;
             e.tileX = o.x;
             e.tileY = o.y;
             e.used = false;
             e.anim.sheet = m_renderer.sheet("Girl1Wait");
             e.anim.setBlock(SpriteLayout::girlWait(true, e.anim.sheet ? e.anim.sheet->frameCount : 2));
+            e.anim.frameTime = 0.2f;
             if (e.anim.sheet)
             {
                 e.x = o.x * tw + (tw - e.anim.sheet->patternW) * 0.5f;
@@ -132,9 +131,13 @@ namespace vovochka
             m_musicPlaying = true;
         }
 
+        m_stats.scoreMax = calculateScoreMax((int)std::size(m_entities), m_diff.enemyCountMax, 1);
+
         BeginDrawing();
         ClearBackground(BLACK);
         EndDrawing();
+
+        m_running = true;
     }
 
     void Game::updateCamera()
@@ -166,26 +169,15 @@ namespace vovochka
         m_camera.target = {tx, ty};
     }
 
-    void Game::processSystemInput()
+    void Game::update(float dt, InputSystem &input)
     {
-        // Пауза/выход
-        if (m_input.isPausePressed())
-        {
-            m_running = false;
-            return;
-        }
+        InputSystem *m_input = &input;
 
-        if (IsKeyPressed(KEY_G))
-            m_debugGrid = !m_debugGrid;
-    }
-
-    void Game::update(float dt)
-    {
         if (m_levelCompletedPending)
             return;
 
-        // Системный ввод (отладка, смена уровня)
-        processSystemInput();
+        if (IsKeyPressed(KEY_G))
+            m_debugGrid = !m_debugGrid;
 
         // Обновление фоновой музыки
         if (m_musicLoaded && m_musicPlaying)
@@ -199,8 +191,8 @@ namespace vovochka
             m_deathTimer -= dt;
             if (m_deathTimer <= 0.0f)
             {
-                --m_lives;
-                if (m_lives > 0)
+                --m_stats.lives;
+                if (m_stats.lives > 0)
                     setLevel(m_currentLevel, m_difficulty); // переиграть уровень
                 else
                     m_running = false; // жизни кончились
@@ -209,11 +201,11 @@ namespace vovochka
         }
 
         // Проверка условий создания бомбы
-        bool wantBomb = checkBombConditions();
+        bool wantBomb = checkBombConditions(input);
 
         // Обновление игрока с вводом
         m_player.setInputEnabled(!m_intimacy.active && !m_bossIntimacy.active && m_deathTimer <= 0.0f);
-        m_player.update(dt, m_map, m_input.getMoveX(), m_input.getMoveY(), wantBomb);
+        m_player.update(dt, m_map, m_input->getMoveX(), m_input->getMoveY(), wantBomb);
 
         int idleVariant = -1;
         if (m_player.popIdleSound(idleVariant))
@@ -297,9 +289,11 @@ namespace vovochka
         playSound("PlayerCackle");
     }
 
-    bool Game::checkBombConditions()
+    bool Game::checkBombConditions(InputSystem &input)
     {
-        if (!m_input.isBombPressed())
+        InputSystem *m_input = &input;
+
+        if (!m_input->isBombPressed())
             return false;
 
         if (m_player.isClimbing() ||
@@ -662,16 +656,6 @@ namespace vovochka
         EndDrawing();
     }
 
-    void Game::run()
-    {
-        while (m_running && !WindowShouldClose())
-        {
-            const float dt = GetFrameTime();
-            update(dt);
-            render();
-        }
-    }
-
     void Game::buildFreePoints()
     {
         m_freePoints.clear();
@@ -990,7 +974,8 @@ namespace vovochka
         if (shouldActivate &&
             !m_levelExit.isActive())
         {
-            activateLevelExit();
+            m_levelExit.setActive(true);
+            playSound("OnTitle");
         }
         else if (!shouldActivate &&
                  m_levelExit.isActive())
@@ -1001,15 +986,9 @@ namespace vovochka
         m_levelExit.update(GetFrameTime());
     }
 
-    void Game::activateLevelExit()
-    {
-        m_levelExit.setActive(true);
-        // playSound("WNCE");
-    }
-
     void Game::nextLevel()
     {
-        playSound("LevelComplete");
+        playSound("YEAH");
 
         m_completedLevel = m_currentLevel;
         m_levelCompletedPending = true;
@@ -1060,6 +1039,12 @@ namespace vovochka
             endBossIntimacy();
     }
 
+    float Game::calculateScoreMax(int girlsNum, int enemyNum, int enemyGirlNum) const
+    {
+        return (float)((girlsNum + enemyGirlNum) * 12 +
+                       enemyNum * 2);
+    }
+
     void Game::renderHUD()
     {
         constexpr float kHudBaseWidth = 800.0f;
@@ -1083,7 +1068,7 @@ namespace vovochka
         drawBar(Rectangle{154.0f + ox, 30.0f, 128.0f, 10.0f},
                 (float)m_stats.health / (float)m_stats.healthMax);
         drawBar(Rectangle{297.0f + ox, 30.0f, 128.0f, 10.0f},
-                m_stats.score < 100.0f ? m_stats.score : 100.0f / 100.0f);
+                m_stats.score / m_stats.scoreMax);
 
         if (const SpriteSheetGPU *pf = m_renderer.sheet("ProgressFon"))
         {
@@ -1098,7 +1083,7 @@ namespace vovochka
         // === 3. Жизни (головы) ===
         if (const SpriteSheetGPU *ap = m_renderer.sheet("AttemptProgress"))
         {
-            for (int i = 0; i < m_lives; ++i)
+            for (int i = 0; i < m_stats.lives; ++i)
             {
                 Rectangle src = ap->frame(i < 5 ? i : 4);
                 Rectangle dst{475.0f + ox + i * (ap->patternW + 15), 10.0f,
@@ -1239,6 +1224,8 @@ namespace vovochka
                     continue;
                 if (toLower(e.path().extension().string()) != ".wav")
                     continue;
+                if (toLower(e.path().filename().string()) == "fon")
+                    continue;
                 const std::string key = toLower(e.path().stem().string());
                 if (m_sounds.count(key))
                     continue;
@@ -1252,9 +1239,11 @@ namespace vovochka
 
         std::filesystem::path commonSoundDir = resolveDirCI(m_dataRoot, {"Common", "LevelSounds"});
         std::filesystem::path levelSoundDir = resolveDirCI(m_dataRoot, {("LEVEL" + std::to_string(m_currentLevel)).c_str(), "Sound"});
+        std::filesystem::path menuSoundDir = resolveDirCI(m_dataRoot, {"COMMON", "MENUSOUNDS"});
 
         loadDir(commonSoundDir);
         loadDir(levelSoundDir);
+        loadDir(menuSoundDir);
 
         m_moveSound = getSound("MOVE");
         m_stairsSound = getSound("STAIRS");

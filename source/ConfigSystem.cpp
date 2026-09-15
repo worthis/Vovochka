@@ -156,7 +156,7 @@ void ConfigSystem::createDefaultSettings()
 
     // Бомба: Пробел / A
     inputConfig.bomb.keyboard = {KEY_SPACE};
-    inputConfig.bomb.gamepad = {GAMEPAD_BUTTON_RIGHT_FACE_DOWN}; // A
+    inputConfig.bomb.gamepad = {GAMEPAD_BUTTON_RIGHT_FACE_RIGHT, GAMEPAD_BUTTON_RIGHT_FACE_DOWN}; // A, B
 
     // Пауза: Esc / Start
     inputConfig.pause.keyboard = {KEY_ESCAPE};
@@ -176,8 +176,8 @@ void ConfigSystem::createDefaultSettings()
     inputConfig.menuRight.gamepad = {GAMEPAD_BUTTON_LEFT_FACE_RIGHT};
 
     inputConfig.menuConfirm.keyboard = {KEY_ENTER, KEY_SPACE};
-    inputConfig.menuConfirm.gamepad = {GAMEPAD_BUTTON_RIGHT_FACE_DOWN}; // A
+    inputConfig.menuConfirm.gamepad = {GAMEPAD_BUTTON_RIGHT_FACE_RIGHT}; // A
 
-    inputConfig.menuCancel.keyboard = {KEY_BACKSPACE, KEY_ESCAPE};
-    inputConfig.menuCancel.gamepad = {GAMEPAD_BUTTON_RIGHT_FACE_RIGHT}; // B
+    inputConfig.menuCancel.keyboard = {KEY_BACKSPACE};
+    inputConfig.menuCancel.gamepad = {GAMEPAD_BUTTON_RIGHT_FACE_DOWN}; // B
 }
