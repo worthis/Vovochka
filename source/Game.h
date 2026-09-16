@@ -27,7 +27,7 @@ namespace vovochka
         void update(float dt, InputSystem &input);
         void render();
         void shutdown();
-        void setLevel(int level, int difficulty); // 1..12, 1..3
+        void setLevel(int level, int difficulty, bool isNewGame); // 1..12, 1..3
         bool isLevelCompleted() const { return m_levelCompletedPending; }
         int completedLevel() const { return m_completedLevel; }
         void proceedToNextLevel();

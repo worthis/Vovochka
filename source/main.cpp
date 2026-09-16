@@ -57,7 +57,7 @@ int main(int argc, char **argv)
                     game.init();
                     gameInitialized = true;
                 }
-                game.setLevel(1, menu.selectedDifficulty());
+                game.setLevel(1, menu.selectedDifficulty(), true);
                 menu.resetRequests();
             }
 

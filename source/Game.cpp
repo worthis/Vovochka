@@ -38,7 +38,7 @@ namespace vovochka
         m_running = false;
     }
 
-    void Game::setLevel(int level, int difficulty)
+    void Game::setLevel(int level, int difficulty, bool isNewGame)
     {
         const char *loadingText = TextFormat("Loading level %d...", level);
         const int loadingTextLength = MeasureText(loadingText, 40);
@@ -51,6 +51,8 @@ namespace vovochka
         m_currentLevel = std::clamp(level, 1, 12);
         m_difficulty = std::clamp(difficulty, 1, 3);
         m_loader.loadDifficulty(m_difficulty, m_diff);
+
+        int currentLives = m_stats.lives;
 
         m_stats = Stats{};
         m_stats.healthMax = m_diff.playerLifeMax;
@@ -131,6 +133,7 @@ namespace vovochka
         }
 
         m_stats.scoreMax = calculateScoreMax((int)std::size(m_entities), m_diff.enemyCountMax, 1);
+        if(!isNewGame)m_stats.lives = currentLives;
 
         BeginDrawing();
         ClearBackground(BLACK);
@@ -192,7 +195,7 @@ namespace vovochka
             {
                 --m_stats.lives;
                 if (m_stats.lives > 0)
-                    setLevel(m_currentLevel, m_difficulty); // переиграть уровень
+                    setLevel(m_currentLevel, m_difficulty, false); // переиграть уровень
                 else
                     m_running = false; // жизни кончились
                 return;
@@ -998,7 +1001,7 @@ namespace vovochka
         m_levelCompletedPending = false;
         m_completedLevel = 0;
         if (m_currentLevel < 12)
-            setLevel(m_currentLevel + 1, m_difficulty);
+            setLevel(m_currentLevel + 1, m_difficulty, false);
     }
 
     void Game::damagePlayer(int dmg)
