@@ -22,6 +22,7 @@ int main(int argc, char **argv)
     InitWindow(1280, 720, "Vovochka");
     InitAudioDevice();
     SetTargetFPS(60);
+    DisableCursor();
     SetExitKey(KEY_NULL);
 
     ConfigSystem::instance().loadSettings("settings.json");

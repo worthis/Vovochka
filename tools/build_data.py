@@ -117,6 +117,24 @@ def main():
                 removed_sounds += 1
                 print(f"  [del] {name}")
     print(f"[OK] Deleted unused sounds: {removed_sounds}")
+    
+    # 9. Копирование файлов курсора (НОВЫЙ ШАГ)
+    print("\n--- Step 7: Copying cursor files ---")
+    target_menu_graphics = DATA_DIR / "COMMON" / "MENUGRAPHICS"
+    target_menu_graphics.mkdir(parents=True, exist_ok=True)
+    
+    cursor_files = ["Cursor.png", "Cursor.dat"]
+    copied_cursor = 0
+    for fname in cursor_files:
+        src = ASSETS_DIR / fname
+        dst = target_menu_graphics / fname
+        if src.exists():
+            shutil.copy2(src, dst)
+            copied_cursor += 1
+            print(f"  [copy] {fname} -> {dst.relative_to(ROOT_DIR)}")
+        else:
+            print(f"  [warn] {fname} not found in {ASSETS_DIR}, skipped")
+    print(f"[OK] Copied cursor files: {copied_cursor}")
 
     print("\n=== Building completed! ===")
     print(f"Result: {DATA_DIR}")

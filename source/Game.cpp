@@ -40,7 +40,7 @@ namespace vovochka
 
     void Game::setLevel(int level, int difficulty)
     {
-        const char *loadingText = TextFormat("Loading level %d...", m_currentLevel);
+        const char *loadingText = TextFormat("Loading level %d...", level);
         const int loadingTextLength = MeasureText(loadingText, 40);
 
         BeginDrawing();
@@ -111,11 +111,10 @@ namespace vovochka
             e.used = false;
             e.anim.sheet = m_renderer.sheet("Girl1Wait");
             e.anim.setBlock(SpriteLayout::girlWait(true, e.anim.sheet ? e.anim.sheet->frameCount : 2));
-            e.anim.frameTime = 0.2f;
             if (e.anim.sheet)
             {
                 e.x = o.x * tw + (tw - e.anim.sheet->patternW) * 0.5f;
-                e.baseY = (o.y + 1) * th - e.anim.sheet->patternH - th * 0.4f;
+                e.y = (o.y + 1) * th - e.anim.sheet->patternH - th * 0.4f;
                 m_entities.push_back(std::move(e));
             }
         }
@@ -234,7 +233,6 @@ namespace vovochka
         {
             g.anim.sheet = act;
             g.anim.setBlock(FrameBlock{0, act->frameCount, true});
-            g.anim.frameTime = 0.08f;
         }
 
         m_intimacy.duration = std::max({m_intimacy.duration,
@@ -390,7 +388,7 @@ namespace vovochka
                     continue;
 
                 Rectangle vb = g.anim.getVisibleBounds();
-                Rectangle gr{g.x + vb.x, g.baseY + vb.y, vb.width, vb.height};
+                Rectangle gr{g.x + vb.x, g.y + vb.y, vb.width, vb.height};
 
                 if (!CheckCollisionRecs(pr, gr))
                     continue;
@@ -552,7 +550,7 @@ namespace vovochka
 
         // --- 3. Девушки ---
         for (const auto &e : m_entities)
-            e.anim.draw(e.x, e.baseY);
+            e.anim.draw(e.x, e.y);
 
         // --- 4. Презервативы (стеки) ---
         if (const SpriteSheetGPU *cs = m_renderer.sheet("Condom"))

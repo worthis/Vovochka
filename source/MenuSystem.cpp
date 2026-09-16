@@ -1148,25 +1148,24 @@ namespace vovochka
         if (!m_cursorVisible)
             return;
 
+        const SpriteSheetGPU *cs = m_menuGraphics.get("Cursor");
+        if (!cs || !cs->valid())
+            return;
+
+        static double cursorAnimT = 0.0;
+        cursorAnimT += GetFrameTime();
+        const int frame = (int)(cursorAnimT / 0.18) % cs->frameCount;
+
         const int sw = GetScreenWidth();
         const int sh = GetScreenHeight();
         const float x0 = (float)std::max(0, (sw - 800) / 2);
         const float y0 = (float)std::max(0, (sh - 600) / 2);
-        const float cx = x0 + m_cursorPos.x;
-        const float cy = y0 + m_cursorPos.y;
+        const float cx = x0 + m_cursorPos.x - 21;
+        const float cy = y0 + m_cursorPos.y - 15;
 
-        const float s = 10.0f;
-
-        DrawTriangle(
-            Vector2{cx, cy},
-            Vector2{cx + s, cy + s * 0.8f},
-            Vector2{cx + s * 0.3f, cy + s * 0.6f},
-            Color{255, 64, 160, 255});
-        DrawTriangleLines(
-            Vector2{cx, cy},
-            Vector2{cx + s, cy + s * 0.8f},
-            Vector2{cx + s * 0.3f, cy + s * 0.6f},
-            WHITE);
+        DrawTexturePro(cs->texture, cs->frame(frame),
+                       Rectangle{cx, cy, (float)cs->patternW, (float)cs->patternH},
+                       {0, 0}, 0.0f, WHITE);
     }
 
 } // namespace vovochka

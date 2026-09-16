@@ -125,7 +125,7 @@ namespace vovochka
             if (m_lastRawMouse.x >= 0.0f)
             {
                 m_cursorPos = screenToMenu(rawMouse);
-                m_cursorVisible = false;
+                m_cursorVisible = true;
                 m_cursorActive = true;
                 m_cursorIdleTime = 0.0f;
             }
@@ -145,7 +145,7 @@ namespace vovochka
         if (touchCount > 0)
         {
             m_cursorPos = screenToMenu(GetTouchPosition(0));
-            m_cursorVisible = true;
+            m_cursorVisible = false;
             m_cursorActive = true;
             m_cursorIdleTime = 0.0f;
         }

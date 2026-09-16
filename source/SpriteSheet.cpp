@@ -100,23 +100,18 @@ namespace vovochka
             }
 
             // Имя файла = имя секции.
-            //   фон (bg*) -> .png (сконвертированный из оригинального JPG)
+            //   фон (bg*) и cursor -> .png
             //   остальное -> .bmp
             const std::string base = toLower(sec);
-            const bool isBackground = (base.rfind("bg", 0) == 0);
-            const char *ext = isBackground ? ".png" : ".bmp";
+            const bool isPNG = (base.rfind("bg", 0) == 0) ||
+                               (base.rfind("cursor", 0) == 0);
+            const char *ext = isPNG ? ".png" : ".bmp";
 
             auto it = fileIndex.find(base + ext);
             if (it == fileIndex.end())
             {
-                if (isBackground)
-                    TraceLog(LOG_WARNING,
-                             "No converted PNG for '%s' in '%s'. "
-                             "Run: python tools/convert_jpg_to_png.py <data_dir>",
-                             sec.c_str(), graphicsDir.c_str());
-                else
-                    TraceLog(LOG_WARNING, "Image not found: '%s%s' in '%s'",
-                             sec.c_str(), ext, graphicsDir.c_str());
+                TraceLog(LOG_WARNING, "Image not found: '%s%s' in '%s'",
+                         sec.c_str(), ext, graphicsDir.c_str());
                 continue;
             }
 
@@ -138,9 +133,9 @@ namespace vovochka
 
             SpriteSheetGPU gpu;
             gpu.texture = LoadTextureFromImage(img);
-            
-            SetTextureFilter(gpu.texture, isBackground ? TEXTURE_FILTER_BILINEAR
-                                                       : TEXTURE_FILTER_POINT);
+
+            SetTextureFilter(gpu.texture, isPNG ? TEXTURE_FILTER_BILINEAR
+                                                : TEXTURE_FILTER_POINT);
 
             gpu.patternW = def.patternW;
             gpu.patternH = def.patternH;
